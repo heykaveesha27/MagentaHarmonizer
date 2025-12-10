@@ -175,10 +175,10 @@ a:visited {
 }
 
 .midi-status {
-  padding: 10px;
+  padding: 5px;
+  margin-right: 30px;
   text-align: center;
   font-size: 14px;
-  margin: 10px 0;
   border-radius: 8px;
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
@@ -190,9 +190,7 @@ body.light-theme .midi-status {
   border: 1px solid rgba(0,0,0,0.1);
 }
 
-.midi-status i {
-  margin-right: 5px;
-}
+
 
 .machine-bg .player,
 .human-bg .player {

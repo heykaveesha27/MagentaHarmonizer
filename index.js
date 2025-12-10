@@ -47,7 +47,7 @@ let harmonyProbability = 0.3;
 
 
 
-const melodyGain = new Tone.Gain(1).toDestination();
+const melodyGain = new Tone.Gain(0.7).toDestination();
 //const reverb = new Tone.Convolver('https://s3-us-west-2.amazonaws.com/s.cdpn.io/969699/hm2_000_ortf_48k.mp3').toMaster();
 
 const reverb = new Tone.Convolver('https://s3-us-west-2.amazonaws.com/s.cdpn.io/969699/hm2_000_ortf_48k.mp3').connect(melodyGain);
@@ -180,9 +180,10 @@ if(synthSlider){
 
 
 let synthConfig = {
-  oscillator: { type: 'sine' },
+  oscillator: { type: 'sawtooth' },
   envelope: { attack: 2, sustain: 1, release: 0.25 }
 };
+
 let synthsPlaying = {};
 
 // Tempo (BPM) default
@@ -654,11 +655,50 @@ const marimba = new Tone.Synth(synthConfig).connect(synthFilter);
 
 
 
+let padConfig = {
+  harmonicity:3.5,
+  modulationIndex:10,
+  oscillator: {type:'sine'},
+  envelope:{
+    attack:2,
+    decay:1,
+    sustain:0.8,
+    release:4
+  },
+  modulation:{type: 'triangle'},
+  modulationEnvelope: {
+    attack:0.8,
+    decay: 0.3,
+    sustain: 0.6,
+    release: 2
+  }
+};
+
+
+ new Tone.PolySynth(Tone.FMSynth,{
+  harmonicity:3.5,
+  modulationIndex:10,
+  oscillator: {type:'sine'},
+  envelope:{
+    attack:2,
+    decay:1,
+    sustain:0.8,
+    release:4
+  },
+  modulation:{type: 'triangle'},
+  modulationEnvelope: {
+    attack:0.8,
+    decay: 0.3,
+    sustain: 0.6,
+    release: 2
+  }
+}).connect(padChorus);
+
 
 function humanKeyDown(note, velocity = 0.7) {
   if (note < MIN_NOTE || note > MAX_NOTE) return;
   let freq = Tone.Frequency(note, 'midi');
-  let synth = new Tone.Synth(synthConfig).connect(synthFilter);
+  let synth = new Tone.PolySynth(Tone.FMSynth,{padConfig}).connect(synthFilter);
   
   synthsPlaying[note] = synth;
   synth.triggerAttack(freq, Tone.now(), velocity);
