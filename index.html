@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Generator</title>
+    <link rel="stylesheet" href="style.css">
+   
+    <script src="https://kit.fontawesome.com/96a0b3cb5f.js" crossorigin="anonymous"></script>
+    <script src="theme.js" defer></script>
+    <script src="index.js" defer></script>
+    <script src="drum.js" defer></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/startaudiocontext/1.0.1/startaudiocontext.min.js"></script>
+<script src="https://unpkg.com/audiokeys@1.2.1/dist/audiokeys.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/webmidi@2.5.0/dist/webmidi.min.js"></script>
+<script src="https://unpkg.com/@tonaljs/tonal@3.8.0/dist/tonal.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@magenta/music@1.0.0"></script>
+</head>
+<body>
+   
+
+    <nav>
+        <div class="logo">Music Generator</div>
+        <ul class="nav-links">
+           
+            <li><a href="#" style="font-size: 16px;">About</a></li>
+            <li><a href="#"><i class="fa-brands fa-github" style="font-size: 20px;"></i></a></li>
+            <li>
+              <div class="box" style="width: 24px; height: 24px; display: flex; justify-content: center; align-items: center;">        <a href="#" id="theme-toggle" style="font-size: 20px;"><i class="fa-solid fa-sun"></i></a></li>
+        </div>
+      </ul>
+        
+    </nav>
+<div class="container" >
+    <div class="machine-bg">
+    <div class="player"></div>
+    <div class="controls">
+        <div class="volume">
+
+        <div class="selectGenre" style="display: flex;gap: 0;">
+          <button class="genre-btn active" data-value="none"  style="border-bottom-left-radius: 8px;border-top-left-radius: 8px;">Auto</button>
+          <button class="genre-btn" data-value="pop">Pop</button>
+          <button class="genre-btn" data-value="classical">Classical</button>
+          <button class="genre-btn" data-value="jazz">Jazz</button>
+          <button class="genre-btn" data-value="edm">EDM</button>
+          <button class="genre-btn" data-value="lofi">Lo-Fi</button>
+          <button class="genre-btn" data-value="ambient" style="border-bottom-right-radius: 8px;border-top-right-radius: 8px;">Ambient</button>
+        </div>
+          <div class="drum-btn highlight">
+            
+            <i class="fa-solid fa-drum"></i>
+         
+          </div>
+        <div style="display: flex; flex-direction: column; align-items: center;">
+        <input id="temperature" class="form-range" type="range" min="0.2" max="2" step="0.1" value="1.1" aria-label="Select temperature">
+          <label for="temperature">Temperature</label>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <input id="tempo" type="range" min="40" max="160" step="1" value="120" aria-label="Tempo">
+            <div id="selecting" class="selecting">
+              <div class="selectBtn"></div>
+              <div id="SelectValue"></div>
+            </div>
+            <label for="tempo">Tempo (BPM)</label>
+          
+        </div>
+        
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <input id="synthvol" type="range" min="0" max="1" step="0.01" value="0.6" aria-label="Tempo">
+          <label for="synth">Synth Volume</label>
+          
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <input id="melody" type="range" min="0" max="1" step="0.01" value="0.6" aria-label="Tempo">
+          <label for="melody">Melody Volume</label>
+          
+        </div>
+    <!--    <div style="display: flex; flex-direction: column; align-items: center;">
+            <input id="drums" type="range" min="0" max="1" step="0.01" value="1" aria-label="Tempo">
+            <label for="drums">Drums Volume</label>
+          
+        </div>-->
+        </div>
+        <!--
+           <div class="select">
+        
+          <div style="margin-top:8px;">
+          <label for="genre">Genre</label>
+          <select id="genre" aria-label="Select genre">
+           
+            <option style="border-top-left-radius: 8px;" value="none">Auto</option>
+            <option value="pop">Pop</option>
+            <option value="classical">Classical</option>
+            <option value="jazz">Jazz</option>
+            <option value="edm">EDM</option>
+            <option value="lofi">Lo-fi</option>
+            <option value="ambient">Ambient</option>
+           
+          </select>
+        </div>
+
+
+          <button id="generate-drums">Generate Drums</button>
+            <button id="drum-startstop" aria-pressed="false">Start</button>
+    </div>
+
+
+  -->
+
+
+
+
+
+
+    </div>
+
+ 
+
+</div>
+      <div class="human-bg">
+    <div class="player"></div>
+    <div class="controls">
+      
+  </div>
+  <div class="midi-status" style="padding: 10px; text-align: center; font-size: 14px; margin: 10px 0;">
+    <i class="fa-solid fa-plug" style="margin-right: 5px;"></i>
+    <span id="midi-device-name" style="color: #888;">No MIDI device connected</span>
+  </div>
+  <div class="keyboard">
+  </div>
+  <div class="loading">
+    Loading...
+  </div>
+
+ 
+      </div>
+
+<div class="drumUI">
+
+
+
+     <div class="sequencer">
+        <div class="instruments" style="margin-top: 30px;">
+        <div style="height: 40px; width: 120px;text-align: center;display: flex; gap: 10px;margin-right: 40px;"><input type="range" value="70" min="0" max="100" class="newSlider" id="kickGain"></div>
+          <div style="height: 40px; width: 120px;text-align: center;display: flex; gap: 10px;margin-right: 40px;"><input type="range" value="70" min="0" max="100" class="newSlider" id="snareGain"></div>
+          <div  style="height: 40px; width: 120px;text-align: center;display: flex; gap: 10px;margin-right: 10px;"><input type="range" value="70" min="0" max="100" class="newSlider" id="hatGain"></div>
+          <div  style="height: 40px; width: 120px;text-align: center;display: flex; gap: 10px;margin-right: 40px;"><input type="range" value="70" min="0" max="100" class="newSlider" id="clapGain"></div>
+          <div  style="height: 40px; width: 120px;text-align: center;display: flex; gap: 10px;margin-right: 40px;"><input type="range" value="70" min="0" max="100" class="newSlider" id="congaGain"></div>
+          <div style="height: 40px; width: 120px;text-align: center;display: flex; gap: 10px;margin-right: 40px;"><input type="range" value="70" min="0" max="100" class="newSlider" id="tomGain"></div>
+          <div  style="height: 40px; width: 120px;text-align: center;display: flex; gap: 10px;margin-right: 40px;"><input type="range" value="70" min="0" max="100" class="newSlider" id="tambGain"></div>
+          <div  style="height: 40px; width: 120px;text-align: center;display: flex; gap: 10px;margin-right: 40px;"><input type="range" value="70" min="0" max="100" class="newSlider" id="openhatGain"></div>
+        </div>
+
+        <div class="names" style="margin-top: 0px;display: flex; flex-direction: column; justify-content: space-evenly;height: 340px;width: 100px;margin-right: 20px;" >
+          <label for="" style="white-space: nowrap;overflow: hidden; text-align: center;">Kick</label>
+          <label for="" style="white-space: nowrap;overflow: hidden; text-align: center;">Snare</label>
+          <label for="" style="white-space: nowrap;overflow: hidden; text-align: center;">Closed Hat</label>
+          <label for="" style="white-space: nowrap;overflow: hidden; text-align: center;">Clap</label>
+          <label for="" style="white-space: nowrap;overflow: hidden; text-align: center;">Conga</label>
+          <label for="" style="white-space: nowrap;overflow: hidden; text-align: center;">Tom</label>
+          <label for="" style="white-space: nowrap;overflow: hidden; text-align: center;">Tamb</label>
+          <label for="" style="white-space: nowrap;overflow: hidden;">Open Hat</label>
+        </div>
+        <canvas id="mycanvas" width="960" height="320" style="width:100%;max-width:960px;border:1px solid rgba(255,255,255,0.08);background:#0b0b0b;"></canvas>
+        <div style="display: flex; align-items: center; margin-left: 15px;">
+              <label for="" style="writing-mode: sideways-lr;">Drums Gain</label>
+              <input id="drums-all" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Tempo">
+          
+        </div>
+
+   
+<!--
+         <div style="display: flex; align-items: center; margin-left: 10px;">
+              <label for="" style="writing-mode: sideways-lr;">Master</label>
+              <input id="drums-all" type="range" min="0" max="1" step="0.01" value="1" aria-label="Tempo">
+          
+        </div>
+        -->
+      </div>
+
+   
+
+</div>      
+
+  
+</div>
+
+
+</body>
+</html>

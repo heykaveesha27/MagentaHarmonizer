@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASIO4ALL Setup Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .step {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 8px;
+        }
+        
+        .step h2 {
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .step-number {
+            background: #667eea;
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+        
+        .step ol, .step ul {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+        
+        .step li {
+            margin-bottom: 10px;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .warning strong {
+            color: #856404;
+        }
+        
+        .info {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .btn-container {
+            text-align: center;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 15px 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-size: 1.2em;
+            font-weight: bold;
+            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        code {
+            background: #e9ecef;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #e83e8c;
+        }
+        
+        .keyboard-shortcut {
+            display: inline-block;
+            background: #333;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 0 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎵 ASIO4ALL Setup Guide</h1>
+            <p>Configure low-latency audio for optimal MIDI keyboard performance</p>
+        </div>
+        
+        <div class="content">
+            <div class="warning">
+                <strong>⚠️ Important:</strong> Web browsers cannot directly access ASIO drivers. You must configure ASIO4ALL at the system level before launching this application.
+            </div>
+            
+            <div class="step">
+                <h2><span class="step-number">1</span>Install ASIO4ALL</h2>
+                <p>If you haven't already installed ASIO4ALL:</p>
+                <ol>
+                    <li>Download ASIO4ALL from: <code>https://www.asio4all.org</code></li>
+                    <li>Run the installer and follow the setup wizard</li>
+                    <li>Restart your computer after installation</li>
+                </ol>
+            </div>
+            
+            <div class="step">
+                <h2><span class="step-number">2</span>Configure ASIO4ALL Control Panel</h2>
+                <ol>
+                    <li>Open the <strong>ASIO4ALL Control Panel</strong>:
+                        <ul>
+                            <li>Search for "ASIO4ALL" in Windows Start Menu, OR</li>
+                            <li>Go to: <code>C:\Program Files (x86)\ASIO4ALL v2\</code> and run <code>ASIO4ALL v2 Settings.exe</code></li>
+                        </ul>
+                    </li>
+                    <li>In the ASIO4ALL panel:
+                        <ul>
+                            <li><strong>Enable your audio device</strong> (check the box next to it)</li>
+                            <li><strong>Set buffer size:</strong> 
+                                <ul>
+                                    <li>Lower = less latency but may cause crackling</li>
+                                    <li>Recommended: <strong>256-512 samples</strong></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </li>
+                    <li>Click <strong>Apply</strong> and close the panel</li>
+                </ol>
+            </div>
+            
+            <div class="step">
+                <h2><span class="step-number">3</span>Set ASIO4ALL as Windows Default (Optional)</h2>
+                <ol>
+                    <li>Right-click the <strong>speaker icon</strong> in your Windows taskbar</li>
+                    <li>Select <strong>"Sound settings"</strong></li>
+                    <li>Under <strong>"Advanced sound options"</strong>, click <strong>"App volume and device preferences"</strong></li>
+                    <li>Find your browser (Chrome, Edge, Firefox) in the list</li>
+                    <li>Set <strong>Output</strong> to your ASIO4ALL-enabled device</li>
+                </ol>
+                
+                <div class="info">
+                    <strong>💡 Note:</strong> ASIO drivers typically work best with DAWs (Digital Audio Workstations) and desktop applications. For web browsers, you may need to use the Windows audio device that ASIO4ALL is routing through.
+                </div>
+            </div>
+            
+            <div class="step">
+                <h2><span class="step-number">4</span>Alternative: Use a Dedicated DAW or Audio Host</h2>
+                <p>For true ASIO low-latency support, consider using:</p>
+                <ul>
+                    <li><strong>REAPER</strong> (free evaluation) - Can host VST plugins and route MIDI</li>
+                    <li><strong>VSTHost</strong> (free) - Simple ASIO host application</li>
+                    <li><strong>FL Studio, Ableton Live, etc.</strong> - Full-featured DAWs with ASIO support</li>
+                </ul>
+                <p>These applications can directly access ASIO4ALL for minimal latency.</p>
+            </div>
+            
+            <div class="step">
+                <h2><span class="step-number">5</span>Optimize Browser Audio Settings</h2>
+                <ol>
+                    <li><strong>Close all browser windows</strong> completely</li>
+                    <li>Ensure ASIO4ALL device is set as default in Windows Sound settings</li>
+                    <li>Reopen your browser</li>
+                    <li>Navigate to the Music Generator application</li>
+                    <li>When prompted, <strong>allow audio access</strong></li>
+                </ol>
+            </div>
+            
+            <div class="success">
+                <strong>✅ Testing Your Setup:</strong>
+                <ol>
+                    <li>Connect your MIDI keyboard</li>
+                    <li>Launch the Music Generator</li>
+                    <li>Check if the MIDI device name appears</li>
+                    <li>Play a note and listen for latency</li>
+                    <li>If latency is high, reduce ASIO4ALL buffer size and restart</li>
+                </ol>
+            </div>
+            
+            <div class="step">
+                <h2><span class="step-number">6</span>Troubleshooting</h2>
+                <ul>
+                    <li><strong>No sound:</strong> Make sure ASIO4ALL device is enabled in the control panel</li>
+                    <li><strong>Crackling/glitches:</strong> Increase ASIO4ALL buffer size</li>
+                    <li><strong>High latency:</strong> Decrease ASIO4ALL buffer size (try 128 or 256 samples)</li>
+                    <li><strong>Browser not using ASIO:</strong> Check Windows Sound settings → App-specific settings</li>
+                    <li><strong>MIDI not working:</strong> Ensure MIDI keyboard is connected before opening browser</li>
+                </ul>
+            </div>
+            
+            <div class="info">
+                <strong>🔧 Advanced Tip:</strong> For the absolute lowest latency in web browsers:
+                <ol>
+                    <li>Use <strong>Chrome or Edge</strong> (best Web Audio API support)</li>
+                    <li>Close unnecessary browser tabs</li>
+                    <li>Set Windows power plan to <strong>"High Performance"</strong></li>
+                    <li>Disable Windows audio enhancements (Sound settings → Device properties → Disable all enhancements)</li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="btn-container">
+            <a href="index.html" class="btn">Launch Music Generator →</a>
+        </div>
+    </div>
+</body>
+</html>
