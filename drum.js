@@ -19,7 +19,6 @@ window.onload = async function () {
   const totalUsedWidth = cols*cellWidth+Math.floor(cols/groupSize)*gapWidth;
 
   // UI
-  //const startStopBtn = document.getElementById('drum-startstop');
   const tempoInput = document.getElementById('tempo');
   const statusSpan = document.getElementById('status');
 
@@ -38,6 +37,7 @@ window.onload = async function () {
   let players = {};
   const synths = {};
   let samplesLoaded = false;
+  let loadedSamplesCount = 0;
   
   // ========== DRUMS RNN INTEGRATION START ==========
   let drumsRNN = null;
@@ -66,8 +66,6 @@ window.onload = async function () {
   }
 
   // Convert DrumsRNN output to grid format
-  // DrumsRNN uses MIDI drum mapping:
-  // 36=kick, 38=snare, 42=closed_hat, 46=open_hat, etc.
   function drumsRNNToGrid(sequence) {
     // Clear existing pattern
     for (let x = 0; x < cols; x++) {
@@ -183,8 +181,7 @@ window.onload = async function () {
 
   // ========== DRUMS RNN INTEGRATION END ==========
 
-
-const masterDrumGain = new Tone.Gain(1).toDestination();
+  const masterDrumGain = new Tone.Gain(0.7).toDestination();
 
   const kickGain = new Tone.Gain(1).connect(masterDrumGain);
   const snareGain = new Tone.Gain(1).connect(masterDrumGain);
@@ -195,38 +192,70 @@ const masterDrumGain = new Tone.Gain(1).toDestination();
   const tambGain = new Tone.Gain(1).connect(masterDrumGain);
   const openhatGain = new Tone.Gain(1).connect(masterDrumGain);
 
-  // try to create players for samples; if decoding fails we'll fallback to synths
+  // Sample pack URLs (from your GitHub repository)
+  const sampleURLs = {
+    kick: 'https://raw.githubusercontent.com/heykaveesha27/MyDrumSamples/master/kick.mp3',
+    snare: 'https://raw.githubusercontent.com/heykaveesha27/MyDrumSamples/master/snare.mp3',
+    hat: 'https://raw.githubusercontent.com/heykaveesha27/MyDrumSamples/master/closed_hat.mp3',
+    clap: 'https://raw.githubusercontent.com/heykaveesha27/MyDrumSamples/master/clap.mp3',
+    conga: 'https://raw.githubusercontent.com/heykaveesha27/MyDrumSamples/master/Conga.mp3',
+    tom: 'https://raw.githubusercontent.com/heykaveesha27/MyDrumSamples/master/tom.mp3',
+    tamb: 'https://raw.githubusercontent.com/heykaveesha27/MyDrumSamples/master/tamb.mp3',
+    open_hat: 'https://raw.githubusercontent.com/heykaveesha27/MyDrumSamples/master/open_hat.mp3'
+  };
+
+  // Load drum samples from CDN
   function makePlayers() {
-    const map = {
-  kick: 'samples/kick.mp3',
-  snare: 'samples/snare.mp3',
-  hat: 'samples/closed_hat.mp3',
-  clap: 'samples/clap.mp3',
-  open_hat:'samples/open_hat.mp3',
-  tamb:'samples/tamb.mp3',
-  tom:'samples/tom.mp3',
-  conga:'samples/conga.mp3'
-    };
+    const totalSamples = Object.keys(sampleURLs).length;
 
-    for (const [k, v] of Object.entries(map)) {
-      players[k] = new Tone.Player(v);
+    for (const [k, v] of Object.entries(sampleURLs)) {
+      players[k] = new Tone.Player({
+        url: v,
+        onload: () => {
+          loadedSamplesCount++;
+          console.log(`✅ Loaded drum: ${k} (${loadedSamplesCount}/${totalSamples})`);
+          
+          if (loadedSamplesCount === totalSamples) {
+            samplesLoaded = true;
+            console.log('🎉 All drum samples loaded from CDN!');
+            window.dispatchEvent(new CustomEvent('drumsReady'));
+          }
+        },
+        onerror: (error) => {
+          console.error(`❌ Failed to load drum: ${k} from CDN`, error);
+        }
+      });
 
+      // Connect to gain nodes
       switch(k){
-        case 'kick':players[k].connect(kickGain);break;
-        case 'snare':players[k].connect(snareGain);break;
-        case 'hat':players[k].connect(hatGain);break;
-        case 'clap':players[k].connect(clapGain);break;
-        case 'conga':players[k].connect(congaGain);break;
-        case 'tom':players[k].connect(tomGain);break;
-        case 'tamb':players[k].connect(tambGain);break;
-        case 'open_hat':players[k].connect(openhatGain);break;
+        case 'kick': players[k].connect(kickGain); break;
+        case 'snare': players[k].connect(snareGain); break;
+        case 'hat': players[k].connect(hatGain); break;
+        case 'clap': players[k].connect(clapGain); break;
+        case 'conga': players[k].connect(congaGain); break;
+        case 'tom': players[k].connect(tomGain); break;
+        case 'tamb': players[k].connect(tambGain); break;
+        case 'open_hat': players[k].connect(openhatGain); break;
       }
     }
   }
 
-  const kickGainSlider = document.getElementById('kickGain');
+  // Create fallback synths
+  function makeSynths() {
+    synths.kick = new Tone.MembraneSynth().connect(kickGain);
+    synths.snare = new Tone.NoiseSynth({ noise: { type: 'white' } }).connect(snareGain);
+    synths.hat = new Tone.MetalSynth({ 
+      frequency: 400, 
+      envelope: { attack: 0.001, decay: 0.1, release: 0.01 } 
+    }).connect(hatGain);
+    synths.clap = new Tone.NoiseSynth({ noise: { type: 'pink' } }).connect(clapGain);
+    console.log('🎹 Fallback synths created');
+  }
 
+  // Volume sliders
+  const kickGainSlider = document.getElementById('kickGain');
   const drumsSlider = document.getElementById('drums-all');
+  
   if(drumsSlider){
     drumsSlider.addEventListener('input',(e)=>{
       masterDrumGain.gain.rampTo(parseFloat(e.target.value),0.05)
@@ -240,34 +269,28 @@ const masterDrumGain = new Tone.Gain(1).toDestination();
     })
   }
 
-const sliders = [
-  {id:'snareGain',gain:snareGain},
-  {id:'hatGain', gain:hatGain},
-  {id:'clapGain',gain:clapGain},
-  {id:'congaGain', gain:congaGain},
-  {id:'tomGain',gain:tomGain},
-  {id:'tambGain',gain:tambGain},
-  {id:'openhatGain',gain:openhatGain}
-];
+  const sliders = [
+    {id:'snareGain',gain:snareGain},
+    {id:'hatGain', gain:hatGain},
+    {id:'clapGain',gain:clapGain},
+    {id:'congaGain', gain:congaGain},
+    {id:'tomGain',gain:tomGain},
+    {id:'tambGain',gain:tambGain},
+    {id:'openhatGain',gain:openhatGain}
+  ];
 
-sliders.forEach(({id, gain})=>{
-  const slider = document.getElementById(id);
-  if(slider){
-    slider.addEventListener('input',(e)=>{
-      gain.gain.rampTo(parseFloat(e.target.value)/100,0.05);
-    })
-  }
-})
+  sliders.forEach(({id, gain})=>{
+    const slider = document.getElementById(id);
+    if(slider){
+      slider.addEventListener('input',(e)=>{
+        gain.gain.rampTo(parseFloat(e.target.value)/100,0.05);
+      })
+    }
+  });
 
-  // create simple synth fallbacks
-  function makeSynths() {
-    synths.kick = new Tone.MembraneSynth().toDestination();
-    synths.snare = new Tone.NoiseSynth({ noise: { type: 'white' } }).toDestination();
-    synths.hat = new Tone.MetalSynth({ frequency: 400, envelope: { attack: 0.001, decay: 0.1, release: 0.01 } }).toDestination();
-    synths.clav = new Tone.Synth().toDestination();
-  }
-
+  // Initialize players
   makePlayers();
+  makeSynths(); // Create fallback synths immediately
   
   // Expose players globally for MIDI access
   window.players = players;
@@ -282,23 +305,59 @@ sliders.forEach(({id, gain})=>{
     open_hat: openhatGain
   };
 
-  // Wait for samples to load, but don't fail if they don't decode
+  // Wait for samples to load
   async function loadSamplesSafe() {
-    try {
-  await Tone.loaded();
-  console.log('Samples loaded');
-  samplesLoaded = true;
-    } catch (err) {
-  console.warn('Sample loading failed or some files could not be decoded:', err);
+    const maxWait = 10000; // 10 seconds max wait
+    const startTime = Date.now();
+    
+    while (!samplesLoaded && (Date.now() - startTime) < maxWait) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    if (!samplesLoaded) {
+      console.warn('⏱️ Sample loading timeout - some samples may still be loading');
+      console.log('✅ Using fallback synths where needed');
     }
   }
 
-  // draw grid with optional playhead highlight (rounded corners)
+  // Improved triggerSound function with better error handling
+  function triggerSound(rowName, time) {
+    const p = players[rowName];
+    
+    // Try to use loaded sample
+    if (p && p.loaded && p.buffer) {
+      try {
+        p.start(time);
+        return;
+      } catch (err) {
+        console.warn(`Player failed for ${rowName}:`, err.message);
+      }
+    }
+    
+    // Fallback to synth
+    const s = synths[rowName];
+    if (s) {
+      try {
+        if (rowName === 'kick') {
+          s.triggerAttackRelease('C2', '8n', time);
+        } else if (rowName === 'snare' || rowName === 'clap') {
+          s.triggerAttackRelease('8n', time);
+        } else if (rowName === 'hat' || rowName === 'open_hat') {
+          s.triggerAttackRelease('16n', time);
+        } else {
+          s.triggerAttackRelease('C4', '8n', time);
+        }
+      } catch (err) {
+        console.warn(`Synth failed for ${rowName}:`, err.message);
+      }
+    }
+  }
+
+  // Draw grid
   function drawGrid() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // helper to draw a rounded rectangle
-    function drawRoundedRect(x, y, w, h, r, fillStyle,strokeStyle, shadow = null) {
+    function drawRoundedRect(x, y, w, h, r, fillStyle, strokeStyle, shadow = null) {
       const radius = Math.min(r, w / 2, h / 2);
 
       if(shadow){
@@ -320,6 +379,7 @@ sliders.forEach(({id, gain})=>{
       ctx.lineTo(x, y + radius);
       ctx.quadraticCurveTo(x, y, x + radius, y);
       ctx.closePath();
+      
       if (fillStyle) {
         ctx.fillStyle = fillStyle;
         ctx.fill();
@@ -327,45 +387,26 @@ sliders.forEach(({id, gain})=>{
       if (strokeStyle) {
         ctx.strokeStyle = strokeStyle;
         ctx.stroke();
-
-        if(shadow){
-          ctx.save();
-          ctx.shadowColor = 'transparent';
-          ctx.strokeStyle = strokeStyle;
-        ctx.stroke();
-        ctx.restore();
-        }else{
-          ctx.strokeStyle = strokeStyle;
-          ctx.stroke();
-        }
       }
 
       if(shadow) ctx.restore();
     }
 
-    // playhead column highlight (draw behind cells)
+    // Playhead highlight
     if (playhead >= 0) {
       const px = playhead * cellWidth;
       ctx.save();
-
       ctx.shadowColor = 'rgba(0, 255, 17, 0.5)';
       ctx.shadowBlur = 12;
       ctx.fillStyle = 'rgba(255,200,0,0.14)';
       ctx.fillRect(px, 0, cellWidth, canvas.height);
-      
-      ctx.shadowBlur = 12;
-      ctx.fillStyle = 'rgba(255,200,0,0.06)';
-      ctx.fillRect(px-12,0,cellWidth+24,canvas.height);
-
       ctx.restore();
-
-      ctx.fillStyle = 'rgba(255,225,120,0.12)';
-      ctx.fillRect(px + 2, canvas.height * 0.45, cellWidth - 4, canvas.height * 0.10);
 
       ctx.fillStyle = 'rgba(54, 255, 43, 0.52)';
       ctx.fillRect(playhead * cellWidth, 0, cellWidth, canvas.height);
     }
 
+    // Draw cells
     const cornerRadius = 8;
     for (let x = 0; x < cols; x++) {
       for (let y = 0; y < rows; y++) {
@@ -380,52 +421,36 @@ sliders.forEach(({id, gain})=>{
     }
   }
 
-  // play a specific sound by row name
-  function triggerSound(rowName, time) {
-    const p = players[rowName];
-    if (p && p.buffer) {
-      try {
-        p.start(time);
-        return;
-      } catch (err) {
-        console.warn(`Player start failed for ${rowName}, falling back to synth:`, err);
-      }
-    }
-    const s = synths[rowName];
-    if (!s) return;
-    if (rowName === 'kick') s.triggerAttackRelease('C2', '8n', time);
-    else if (rowName === 'snare') s.triggerAttackRelease('8n', time);
-    else if (rowName === 'hat') s.triggerAttackRelease('16n', time);
-    else s.triggerAttackRelease('C4', '8n', time);
-  }
-
-  // Sequencer: step through columns at specified subdivision
+  // Sequencer
   const stepInterval = '16n';
-
   const looper = new Tone.Loop((time) => {
     playhead = (playhead + 1) % cols;
     for (let y = 0; y < rows; y++) {
       if (cellStates[playhead][y]) {
-        const rowName = rowSounds[y % rowSounds.length] || 'clav';
+        const rowName = rowSounds[y % rowSounds.length] || 'kick';
         triggerSound(rowName, time);
       }
     }
     requestAnimationFrame(drawGrid);
   }, stepInterval).start(0);
 
-  // start/stop helpers
+  // Transport controls
   let running = false;
+  
   async function startTransport() {
     if (!running) {
       await Tone.start();
+      
+      // Wait for samples if not loaded
       if (!samplesLoaded) {
-        const wait = loadSamplesSafe();
-        const timeout = new Promise((res) => setTimeout(res, 2000));
-        await Promise.race([wait, timeout]);
+        console.log('⏳ Waiting for drum samples...');
+        await loadSamplesSafe();
       }
+      
       Tone.Transport.bpm.value = Number(tempoInput.value) || 120;
       Tone.Transport.start();
       running = true;
+      console.log('▶️ Drum sequencer started');
     }
   }
 
@@ -435,26 +460,25 @@ sliders.forEach(({id, gain})=>{
       running = false;
       playhead = -1;
       drawGrid();
+      console.log('⏸️ Drum sequencer stopped');
     }
   }
 
   const drumbtn = document.querySelector('.drum-btn');
 
-  // wire UI
   if(drumbtn){
     drumbtn.addEventListener('click', async () => {
       if (!running){ 
         await startTransport();
         drumbtn.classList.add('highlight');
-      }
-      else {
+      } else {
         stopTransport();
         drumbtn.classList.remove('highlight');
       }
     });
   }
 
-  // ========== GENERATE DRUMS BUTTON ==========
+  // Generate button
   const generateBtn = document.getElementById('generate-drums');
   if (generateBtn) {
     generateBtn.addEventListener('click', async () => {
@@ -462,24 +486,8 @@ sliders.forEach(({id, gain})=>{
         alert('DrumsRNN is still loading, please wait...');
         return;
       }
-   const clearBtn = document.getElementById('clear-drums');
-   if(clearBtn){
-    clearBtn.addEventListener('click',()=>{
-      for(let x=0; x<cols;x++){
-        for(let y=0;y<rows;y++){
-          cellStates[x][y]=false;
-        }
-      }
-      drawGrid();
-      console.log('Drum Pattern Cleared');
-    })
-   }   
-
-
-      // Get temperature from slider or use default
-      const tempSlider = document.getElementById('drum-temperature');
-      const temperature = tempSlider ? parseFloat(tempSlider.value) : 1.0;
       
+      const temperature = 1.0;
       generateBtn.disabled = true;
       generateBtn.textContent = 'Generating...';
       
@@ -490,12 +498,22 @@ sliders.forEach(({id, gain})=>{
     });
   }
 
+  // Clear button
+  const clearBtn = document.getElementById('clear-drums');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      window.drumRNNAPI.clearGrid();
+      console.log('🧹 Drum pattern cleared');
+    });
+  }
+
+  // Tempo change
   tempoInput.addEventListener('change', () => {
     const v = Number(tempoInput.value);
     if (!isNaN(v) && v > 0) Tone.Transport.bpm.value = v;
   });
 
-  // toggle cells on click
+  // Click to toggle cells
   canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = Math.floor((e.clientX - rect.left) / cellWidth);
@@ -505,11 +523,9 @@ sliders.forEach(({id, gain})=>{
     drawGrid();
   });
 
-  // initialize
+  // Initialize
+  console.log('🎵 Drum sequencer initialized');
   await loadSamplesSafe();
-  
-  // Initialize DrumsRNN (non-blocking)
   initDrumsRNN().catch(err => console.error('DrumsRNN init error:', err));
-  
   drawGrid();
 };
