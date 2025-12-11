@@ -1,5 +1,3 @@
-
-
 window.onload = async function () {
   // Basic config
   
@@ -41,11 +39,152 @@ window.onload = async function () {
   const synths = {};
   let samplesLoaded = false;
   
-  
+  // ========== DRUMS RNN INTEGRATION START ==========
+  let drumsRNN = null;
+  let drumsRNNReady = false;
+  let isGeneratingPattern = false;
+
+  // Initialize DrumsRNN model
+  async function initDrumsRNN() {
+    try {
+      console.log('🥁 Loading DrumsRNN model...');
+      drumsRNN = new mm.MusicRNN('https://storage.googleapis.com/magentadata/js/checkpoints/music_rnn/drum_kit_rnn');
+      await drumsRNN.initialize();
+      drumsRNNReady = true;
+      console.log('✅ DrumsRNN ready!');
+      
+      // Enable generate button if exists
+      const genBtn = document.getElementById('generate-drums');
+      if (genBtn) {
+        genBtn.disabled = false;
+        genBtn.textContent = 'Generate AI Drums';
+      }
+    } catch (err) {
+      console.error('❌ DrumsRNN initialization failed:', err);
+      drumsRNNReady = false;
+    }
+  }
+
+  // Convert DrumsRNN output to grid format
+  // DrumsRNN uses MIDI drum mapping:
+  // 36=kick, 38=snare, 42=closed_hat, 46=open_hat, etc.
+  function drumsRNNToGrid(sequence) {
+    // Clear existing pattern
+    for (let x = 0; x < cols; x++) {
+      for (let y = 0; y < rows; y++) {
+        cellStates[x][y] = false;
+      }
+    }
+
+    if (!sequence || !sequence.notes) return;
+
+    // Map MIDI pitch to our row index
+    const pitchToRow = {
+      36: 0, // kick
+      38: 1, // snare
+      42: 2, // closed hat
+      39: 3, // clap (hand clap)
+      64: 4, // conga (low conga)
+      50: 5, // tom (high tom)
+      54: 6, // tamb (tambourine)
+      46: 7  // open hat
+    };
+
+    // Get quantization step (16th notes typically)
+    const stepsPerQuarter = sequence.quantizationInfo?.stepsPerQuarter || 4;
+    const totalSteps = cols; // Our grid width
+
+    sequence.notes.forEach(note => {
+      const row = pitchToRow[note.pitch];
+      if (row === undefined) return; // Skip unmapped drums
+
+      // Convert quantized step to grid column
+      const col = Math.floor((note.quantizedStartStep / stepsPerQuarter) * 4) % cols;
+      
+      if (col >= 0 && col < cols && row >= 0 && row < rows) {
+        cellStates[col][row] = true;
+      }
+    });
+
+    drawGrid();
+  }
+
+  // Generate drum pattern with DrumsRNN
+  async function generateDrumPattern(temperature = 1.0, steps = 32) {
+    if (!drumsRNNReady) {
+      console.warn('DrumsRNN not ready yet');
+      return;
+    }
+
+    if (isGeneratingPattern) {
+      console.warn('Already generating a pattern...');
+      return;
+    }
+
+    try {
+      isGeneratingPattern = true;
+      console.log('🎵 Generating drum pattern...');
+
+      // Create a seed sequence (optional - can start from empty)
+      const seed = {
+        notes: [],
+        quantizationInfo: { stepsPerQuarter: 4 },
+        totalQuantizedSteps: 16
+      };
+
+      // Or use current grid as seed if it has notes
+      const hasNotes = cellStates.some(col => col.some(cell => cell));
+      if (hasNotes) {
+        // Convert current grid to seed
+        for (let x = 0; x < Math.min(cols, 16); x++) {
+          for (let y = 0; y < rows; y++) {
+            if (cellStates[x][y]) {
+              const rowToPitch = {
+                0: 36, 1: 38, 2: 42, 3: 39,
+                4: 64, 5: 50, 6: 54, 7: 46
+              };
+              seed.notes.push({
+                pitch: rowToPitch[y] || 36,
+                quantizedStartStep: x,
+                quantizedEndStep: x + 1,
+                velocity: 100
+              });
+            }
+          }
+        }
+      }
+
+      // Generate continuation
+      const result = await drumsRNN.continueSequence(seed, steps, temperature);
+      
+      console.log('✅ Pattern generated!');
+      drumsRNNToGrid(result);
+
+    } catch (err) {
+      console.error('❌ Pattern generation failed:', err);
+    } finally {
+      isGeneratingPattern = false;
+    }
+  }
+
+  // Expose API for external control
+  window.drumRNNAPI = {
+    generate: generateDrumPattern,
+    isReady: () => drumsRNNReady,
+    clearGrid: () => {
+      for (let x = 0; x < cols; x++) {
+        for (let y = 0; y < rows; y++) {
+          cellStates[x][y] = false;
+        }
+      }
+      drawGrid();
+    }
+  };
+
+  // ========== DRUMS RNN INTEGRATION END ==========
 
 
 const masterDrumGain = new Tone.Gain(1).toDestination();
-
 
   const kickGain = new Tone.Gain(1).connect(masterDrumGain);
   const snareGain = new Tone.Gain(1).connect(masterDrumGain);
@@ -67,7 +206,6 @@ const masterDrumGain = new Tone.Gain(1).toDestination();
   tamb:'samples/tamb.mp3',
   tom:'samples/tom.mp3',
   conga:'samples/conga.mp3'
-
     };
 
     for (const [k, v] of Object.entries(map)) {
@@ -86,7 +224,6 @@ const masterDrumGain = new Tone.Gain(1).toDestination();
     }
   }
 
-
   const kickGainSlider = document.getElementById('kickGain');
 
   const drumsSlider = document.getElementById('drums-all');
@@ -96,7 +233,6 @@ const masterDrumGain = new Tone.Gain(1).toDestination();
     });
     masterDrumGain.gain.value=parseFloat(drumsSlider.value);
   }
-
 
   if(kickGainSlider){
     kickGainSlider.addEventListener('input',(e)=>{
@@ -124,7 +260,6 @@ sliders.forEach(({id, gain})=>{
 })
 
   // create simple synth fallbacks
-  
   function makeSynths() {
     synths.kick = new Tone.MembraneSynth().toDestination();
     synths.snare = new Tone.NoiseSynth({ noise: { type: 'white' } }).toDestination();
@@ -133,7 +268,6 @@ sliders.forEach(({id, gain})=>{
   }
 
   makePlayers();
-  //makeSynths();
   
   // Expose players globally for MIDI access
   window.players = players;
@@ -167,13 +301,12 @@ sliders.forEach(({id, gain})=>{
     function drawRoundedRect(x, y, w, h, r, fillStyle,strokeStyle, shadow = null) {
       const radius = Math.min(r, w / 2, h / 2);
 
-            if(shadow){
+      if(shadow){
         ctx.save();
         if(shadow.color) ctx.shadowColor = shadow.color;
         if(typeof shadow.blur === 'number') ctx.shadowBlur = shadow.blur;
         if(typeof shadow.offsetX === 'number') ctx.shadowOffsetX=shadow.offsetX;
         if(typeof shadow.offsetY=== 'number') ctx.shadowOffsetY=shadow.offsetY;
-        
       }
 
       ctx.beginPath();
@@ -208,14 +341,10 @@ sliders.forEach(({id, gain})=>{
       }
 
       if(shadow) ctx.restore();
-
-
-
     }
 
     // playhead column highlight (draw behind cells)
     if (playhead >= 0) {
-
       const px = playhead * cellWidth;
       ctx.save();
 
@@ -237,7 +366,7 @@ sliders.forEach(({id, gain})=>{
       ctx.fillRect(playhead * cellWidth, 0, cellWidth, canvas.height);
     }
 
-    const cornerRadius = 8; // change this to increase/decrease corner rounding
+    const cornerRadius = 8;
     for (let x = 0; x < cols; x++) {
       for (let y = 0; y < rows; y++) {
         const px = x * cellWidth;
@@ -245,7 +374,6 @@ sliders.forEach(({id, gain})=>{
         if (cellStates[x][y]) {
           drawRoundedRect(px + 2, py + 2, cellWidth - 4, cellHeight - 4, cornerRadius, '#6ac2fdff', null);
         } else {
-          // background cell (transparent fill, but draw rounded border)
           drawRoundedRect(px + 2, py + 2, cellWidth - 4, cellHeight - 4, cornerRadius, null, '#fff6f6ff');
         }
       }
@@ -260,11 +388,9 @@ sliders.forEach(({id, gain})=>{
         p.start(time);
         return;
       } catch (err) {
-        // If player fails (buffer not ready or decode error), fallback to synth
         console.warn(`Player start failed for ${rowName}, falling back to synth:`, err);
       }
     }
-    // fallback to synths if no buffer decoded
     const s = synths[rowName];
     if (!s) return;
     if (rowName === 'kick') s.triggerAttackRelease('C2', '8n', time);
@@ -274,19 +400,16 @@ sliders.forEach(({id, gain})=>{
   }
 
   // Sequencer: step through columns at specified subdivision
-  const stepInterval = '16n'; // each column is an 8th note by default
+  const stepInterval = '16n';
 
   const looper = new Tone.Loop((time) => {
-    // advance playhead
     playhead = (playhead + 1) % cols;
-    // for each row in this column, trigger sound if active
     for (let y = 0; y < rows; y++) {
       if (cellStates[playhead][y]) {
         const rowName = rowSounds[y % rowSounds.length] || 'clav';
         triggerSound(rowName, time);
       }
     }
-    // redraw quickly (schedule on next animation frame)
     requestAnimationFrame(drawGrid);
   }, stepInterval).start(0);
 
@@ -295,9 +418,7 @@ sliders.forEach(({id, gain})=>{
   async function startTransport() {
     if (!running) {
       await Tone.start();
-      // if samples still haven't finished loading, wait a short time so playback doesn't trigger errors
       if (!samplesLoaded) {
-        // try to wait for Tone.loaded (but don't block forever)
         const wait = loadSamplesSafe();
         const timeout = new Promise((res) => setTimeout(res, 2000));
         await Promise.race([wait, timeout]);
@@ -305,8 +426,6 @@ sliders.forEach(({id, gain})=>{
       Tone.Transport.bpm.value = Number(tempoInput.value) || 120;
       Tone.Transport.start();
       running = true;
-      
-      
     }
   }
 
@@ -314,29 +433,49 @@ sliders.forEach(({id, gain})=>{
     if (running) {
       Tone.Transport.stop();
       running = false;
-      
-      
       playhead = -1;
       drawGrid();
     }
   }
 
-const drumbtn = document.querySelector('.drum-btn');
-
+  const drumbtn = document.querySelector('.drum-btn');
 
   // wire UI
   if(drumbtn){
-  drumbtn.addEventListener('click', async () => {
-    if (!running){ 
-      await startTransport();
-      drumbtn.classList.add('highlight');
-    }
-    else {
-      stopTransport();
-      drumbtn.classList.remove('highlight');
-    }
-  });
-}
+    drumbtn.addEventListener('click', async () => {
+      if (!running){ 
+        await startTransport();
+        drumbtn.classList.add('highlight');
+      }
+      else {
+        stopTransport();
+        drumbtn.classList.remove('highlight');
+      }
+    });
+  }
+
+  // ========== GENERATE DRUMS BUTTON ==========
+  const generateBtn = document.getElementById('generate-drums');
+  if (generateBtn) {
+    generateBtn.addEventListener('click', async () => {
+      if (!drumsRNNReady) {
+        alert('DrumsRNN is still loading, please wait...');
+        return;
+      }
+      
+      // Get temperature from slider or use default
+      const tempSlider = document.getElementById('drum-temperature');
+      const temperature = tempSlider ? parseFloat(tempSlider.value) : 1.0;
+      
+      generateBtn.disabled = true;
+      generateBtn.textContent = 'Generating...';
+      
+      await generateDrumPattern(temperature, cols);
+      
+      generateBtn.disabled = false;
+      generateBtn.textContent = 'Generate AI Drums';
+    });
+  }
 
   tempoInput.addEventListener('change', () => {
     const v = Number(tempoInput.value);
@@ -355,5 +494,9 @@ const drumbtn = document.querySelector('.drum-btn');
 
   // initialize
   await loadSamplesSafe();
+  
+  // Initialize DrumsRNN (non-blocking)
+  initDrumsRNN().catch(err => console.error('DrumsRNN init error:', err));
+  
   drawGrid();
 };
