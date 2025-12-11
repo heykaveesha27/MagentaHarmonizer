@@ -462,7 +462,20 @@ sliders.forEach(({id, gain})=>{
         alert('DrumsRNN is still loading, please wait...');
         return;
       }
-      
+   const clearBtn = document.getElementById('clear-drums');
+   if(clearBtn){
+    clearBtn.addEventListener('click',()=>{
+      for(let x=0; x<cols;x++){
+        for(let y=0;y<rows;y++){
+          cellStates[x][y]=false;
+        }
+      }
+      drawGrid();
+      console.log('Drum Pattern Cleared');
+    })
+   }   
+
+
       // Get temperature from slider or use default
       const tempSlider = document.getElementById('drum-temperature');
       const temperature = tempSlider ? parseFloat(tempSlider.value) : 1.0;

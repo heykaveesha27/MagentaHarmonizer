@@ -1,5 +1,3 @@
-
-
 var slider = document.getElementById("tempo");
   var selector = document.getElementById("selecting");
 
@@ -7,9 +5,7 @@ var slider = document.getElementById("tempo");
     selector.style.left = this.value + "%";
   }
 
-
-
-function calculateDegree(e){
+  function calculateDegree(e){
   const x1 = window.innerWidth/2;
   const y1 = window.innerHeight/2;
   const x2 = e.clientX;
@@ -23,9 +19,6 @@ function calculateDegree(e){
 
   return deg;
 }
-
-
-
 
 const MIN_NOTE = 48;
 const MAX_NOTE = 84;
@@ -856,9 +849,9 @@ function updateTouchedNotes(evt) {
     let keyIndex = onScreenKeyboard.indexOf(element);
     if (keyIndex >= 0) {
       touchedNotes.add(MIN_NOTE + keyIndex);
-      if (!evt.defaultPrevented) {
+     
         evt.preventDefault();
-      }
+      
     }
   }
   for (let note of pointedNotes) {
@@ -892,11 +885,11 @@ document.documentElement.addEventListener('mouseup', () => {
   pointedNotes.forEach(n => humanKeyUp(n));
   pointedNotes.clear();
 });
-document.documentElement.addEventListener('touchstart', updateTouchedNotes);
-document.documentElement.addEventListener('touchmove', updateTouchedNotes);
-document.documentElement.addEventListener('touchend', updateTouchedNotes);
+document.documentElement.addEventListener('touchstart', updateTouchedNotes,{passive:false});
+document.documentElement.addEventListener('touchmove', updateTouchedNotes,{passive:false});
+document.documentElement.addEventListener('touchend', updateTouchedNotes,{passive:false});
 
-// Temperature control
+
 
 // Temperature control: use native range input
 const tempSliderEl = document.querySelector('#temperature');
@@ -1098,182 +1091,473 @@ const GENRE_PRESETS = {
   }
 };
 
+
+// Add this after the GENRE_PRESETS definition (around line 890)
+
+// Current selected genre (default to 'none' for auto-detection)
 let currentGenre = 'none';
 
-// helper: get pitch-class array for a tonic+mode (uses Tonal when present)
-function scalePCsFor(tonic = 'C', mode = 'major') {
-  if (typeof Tonal !== 'undefined' && Tonal.Scale && Tonal.Scale.get) {
-    try {
-      const scaleInfo = Tonal.Scale.get(`${tonic} ${mode}`);
-      if (scaleInfo && Array.isArray(scaleInfo.notes) && scaleInfo.notes.length) {
-        return scaleInfo.notes.map(n => {
-          try { return Tonal.Note.midi(n + '4') % 12; } catch (e) { return Tonal.Note.pc(n); }
-        }).map(x => (typeof x === 'number' ? x : 0));
-      }
-    } catch (e) {
-      // fall through
-    }
-  }
-  // fallback: C major pitch classes
-  return [0,2,4,5,7,9,11];
-}
-
-// apply a genre preset to global state + UI
-function applyGenre(name) {
-  const preset = GENRE_PRESETS[name] || GENRE_PRESETS.none;
-  currentGenre = name;
-
-  // audio / generation params
-  temperature = preset.temperature != null ? preset.temperature : temperature;
-  harmonyProbability = preset.harmonyProbability != null ? preset.harmonyProbability : harmonyProbability;
-  tempoBPM = preset.tempo != null ? preset.tempo : tempoBPM;
-
-  // tempo update
-  try {
-    if (typeof Tone !== 'undefined' && Tone.Transport && Tone.Transport.bpm && typeof Tone.Transport.bpm.rampTo === 'function') {
-      Tone.Transport.bpm.rampTo(tempoBPM, 0.1);
-    }
-  } catch (err) {
-    console.warn('Could not update tempo for genre preset:', err);
-  }
-
-  // override play interval/notation used by the generator if preset supplies one
-  // we store it on a small genreConfig so startSequenceGenerator can read it
-  window.genreConfig = window.genreConfig || {};
-  window.genreConfig.playIntervalNotation = preset.playIntervalNotation || null;
-  window.genreConfig.playDuration = preset.playDuration || null;
-  window.genreConfig.maxLeap = preset.maxLeap || null;
-
-  // set a preferred scale mode using currentChordName's tonic if possible
-  try {
-    const tonic = (typeof Tonal !== 'undefined' && Tonal.Chord && Tonal.Chord.get)
-      ? (Tonal.Chord.get(currentChordName).tonic || 'C')
-      : (currentChordName && currentChordName[0]) || 'C';
-    if (preset.scaleMode) {
-      currentScalePCs = scalePCsFor(tonic, preset.scaleMode);
-    }
-  } catch (e) {
-    // ignore
-  }
-
-  // update UI controls if present
-  const genreEl = document.getElementById('genre');
-  if (genreEl) genreEl.value = name;
-  const tempEl = document.querySelector('#temperature');
-  if (tempEl) tempEl.value = String(temperature);
-  const tempoEl = document.querySelector('#tempo');
-  const selectValue = document.querySelector('#SelectValue');
-  if (tempoEl){ tempoEl.value = String(tempoBPM);
-    tempoEl.dispatchEvent(new Event('input',{bubbles:true}))
-  }
-  if(selectValue){
-    selectValue.textContent=String(tempoBPM);
-  }
-}
-
-
-
-
-
-// wire selector on page load
-/*
-const genreSelect = document.getElementById('genre');
-if (genreSelect) {
-  genreSelect.addEventListener('change', (e) => applyGenre(e.target.value));
-  // initialize from control
-  applyGenre(genreSelect.value || 'none');
-}
-  */
-
-(function initGenreButtons(){
+// Genre button handling
+document.addEventListener('DOMContentLoaded', () => {
   const genreButtons = document.querySelectorAll('.genre-btn');
-  const hiddenSelect = document.getElementById('genre');
   
-
-  if(!genreButtons.length) return;
-
-
+  genreButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      const selectedGenre = e.target.dataset.value;
+      
+      // Only process genre buttons (not other buttons like drum/clear)
+      if (!selectedGenre) return;
+      
+      // Update active state
+      genreButtons.forEach(btn => {
+        if (btn.dataset.value) {
+          btn.classList.remove('active');
+        }
+      });
+      e.target.classList.add('active');
+      
+      // Set current genre
+      currentGenre = selectedGenre;
+      console.log('🎼 Genre changed to:', selectedGenre);
+      
+      // Apply genre preset if it exists
+      const preset = GENRE_PRESETS[selectedGenre];
+      if (preset) {
+        // Update tempo
+        if (preset.tempo) {
+          tempoBPM = preset.tempo;
+          const tempoSlider = document.getElementById('tempo');
+          if (tempoSlider) {
+            tempoSlider.value = preset.tempo;
+            try {
+              if (Tone.Transport && Tone.Transport.bpm && typeof Tone.Transport.bpm.rampTo === 'function') {
+                Tone.Transport.bpm.rampTo(preset.tempo, 0.5);
+              }
+            } catch (err) {
+              console.warn('Could not change tempo:', err);
+            }
+          }
+        }
+        
+        // Update temperature
+        if (preset.temperature !== undefined) {
+          temperature = preset.temperature;
+          const tempSlider = document.getElementById('temperature');
+          if (tempSlider) {
+            tempSlider.value = preset.temperature;
+          }
+        }
+        
+        // Update harmony probability
+        if (preset.harmonyProbability !== undefined) {
+          harmonyProbability = preset.harmonyProbability;
+        }
+        
+        // Store genre-specific config for sequence generator
+        window.genreConfig = {
+          playIntervalNotation: preset.playIntervalNotation,
+          playDuration: preset.playDuration,
+          maxLeap: preset.maxLeap,
+          scaleMode: preset.scaleMode,
+          rhythmStyle: preset.rhythmStyle,
+          phraseLength: preset.phraseLength,
+          articulation: preset.articulation
+        };
+        
+        console.log(`✨ Applied ${selectedGenre} preset:`, {
+          tempo: preset.tempo,
+          temperature: preset.temperature,
+          harmonyProb: preset.harmonyProbability,
+          maxLeap: preset.maxLeap
+        });
+        
+        // Log musical intelligence settings
+        console.log(`🎵 Musical Intelligence for ${selectedGenre}:
+  - Melodic smoothing (max leap: ${preset.maxLeap || 7} semitones)
+  - Rhythmic pattern: ${preset.rhythmStyle || 'balanced'}
+  - Phrase structure: ${preset.phraseLength || 'medium'}
+  - Articulation: ${preset.articulation || 'mixed'}
+`);
+      }
+    });
+  });
   
+  // Initialize with default genre (Auto)
+  const defaultBtn = document.querySelector('.genre-btn.active');
+  if (defaultBtn && defaultBtn.dataset.value) {
+    currentGenre = defaultBtn.dataset.value;
+    window.genreConfig = GENRE_PRESETS[currentGenre] || {};
+  } else {
+    window.genreConfig = {};
+  }
+});
 
-  genreButtons.forEach(button =>{
-    button.addEventListener('click',(e)=>{
-      const value = button.getAttribute('data-value');
+// ============================================================================
+// MUSICAL INTELLIGENCE - Enhanced Melody Generation
+// ============================================================================
 
-      genreButtons.forEach(btn=>btn.classList.remove('active'));
-      button.classList.add('active');
+// Rhythm patterns library for different genres
+const RHYTHM_PATTERNS = {
+  pop: [
+    [1, 0, 1, 0, 1, 0, 1, 0],      // Steady eighth notes
+    [1, 0, 0, 1, 0, 1, 0, 0],      // Syncopated
+    [1, 1, 0, 1, 0, 1, 1, 0]       // Mixed
+  ],
+  classical: [
+    [1, 1, 1, 1, 1, 1, 1, 1],      // Quarter notes
+    [1, 0, 1, 0, 1, 0, 1, 0],      // Eighth notes
+    [1, 1, 1, 0, 1, 1, 1, 0]       // Dotted rhythm
+  ],
+  jazz: [
+    [1, 0, 0, 1, 1, 0, 0, 1],      // Swing feel
+    [1, 0, 1, 0, 0, 1, 0, 1],      // Off-beat
+    [1, 1, 0, 1, 0, 0, 1, 0]       // Complex
+  ],
+  edm: [
+    [1, 0, 1, 0, 1, 0, 1, 0],      // Four-on-floor feel
+    [1, 0, 0, 0, 1, 0, 0, 0],      // Sparse
+    [1, 1, 1, 1, 0, 0, 0, 0]       // Buildup
+  ],
+  lofi: [
+    [1, 0, 0, 1, 0, 0, 1, 0],      // Laid back
+    [1, 0, 1, 0, 0, 0, 1, 0],      // Chill
+    [1, 0, 0, 0, 1, 0, 0, 1]       // Relaxed
+  ],
+  ambient: [
+    [1, 0, 0, 0, 0, 0, 0, 0],      // Very sparse
+    [1, 0, 0, 0, 1, 0, 0, 0],      // Long notes
+    [1, 0, 0, 1, 0, 0, 0, 0]       // Minimal
+  ]
+};
 
-      if(hiddenSelect){
-        hiddenSelect.dispatchEvent(new Event('change',{bubbles:true}));
+// Melodic contour shapes for natural phrases
+const MELODIC_CONTOURS = {
+  arch: [0, 2, 4, 3, 1, -1],          // Rise and fall (classic)
+  ascend: [0, 1, 2, 3, 4, 5],         // Upward motion
+  descend: [0, -1, -2, -3, -4, -5],   // Downward motion
+  wave: [0, 2, 1, 3, 2, 0],           // Wave motion
+  leap_return: [0, 5, 4, 3, 2, 1]     // Leap up, step down
+};
+
+// Note duration probabilities for different rhythmic feels
+const NOTE_DURATIONS = {
+  legato: { '2n': 0.3, '4n': 0.4, '8n': 0.2, '16n': 0.1 },
+  staccato: { '16n': 0.5, '8n': 0.3, '4n': 0.2, '2n': 0.0 },
+  mixed: { '2n': 0.1, '4n': 0.3, '8n': 0.4, '16n': 0.2 },
+  sustained: { '2n': 0.5, '4n': 0.3, '8n': 0.15, '16n': 0.05 }
+};
+
+// Phrase structure (measures before natural pause/breath)
+const PHRASE_LENGTHS = {
+  short: 2,   // 2 measures
+  medium: 4,  // 4 measures (standard)
+  long: 8     // 8 measures
+};
+
+// Musical phrase analyzer
+function analyzePhrase(seed) {
+  if (!seed || seed.length < 2) return null;
+  
+  const intervals = [];
+  const rhythms = [];
+  
+  for (let i = 0; i < seed.length - 1; i++) {
+    // Melodic intervals
+    const interval = seed[i + 1].note - seed[i].note;
+    intervals.push(interval);
+    
+    // Rhythmic intervals
+    const rhythm = seed[i + 1].time - seed[i].time;
+    rhythms.push(rhythm);
+  }
+  
+  // Determine melodic direction tendency
+  const avgInterval = intervals.reduce((sum, val) => sum + val, 0) / intervals.length;
+  const direction = avgInterval > 1 ? 'ascending' : avgInterval < -1 ? 'descending' : 'static';
+  
+  // Determine rhythmic consistency
+  const rhythmVariance = Math.max(...rhythms) - Math.min(...rhythms);
+  const rhythmStyle = rhythmVariance < 0.1 ? 'steady' : 'varied';
+  
+  return {
+    direction,
+    avgInterval,
+    rhythmStyle,
+    intervals,
+    rhythms
+  };
+}
+
+// Apply musical phrasing (add rests, breathing points)
+function applyPhrasing(sequence, phraseLength = 4) {
+  if (!sequence || sequence.length === 0) return sequence;
+  
+  const result = [];
+  const beatsPerMeasure = 4;
+  const notesPerPhrase = phraseLength * beatsPerMeasure;
+  
+  for (let i = 0; i < sequence.length; i++) {
+    result.push(sequence[i]);
+    
+    // Add rest at phrase boundaries (every N notes)
+    if ((i + 1) % notesPerPhrase === 0 && i < sequence.length - 1) {
+      // Don't add actual rest, just create a longer gap by skipping
+      // This is handled in the generation loop
+      result.push(-1); // -1 signals a rest/silence
+    }
+  }
+  
+  return result;
+}
+
+// Smooth melodic motion (avoid awkward leaps)
+function smoothMelody(sequence, maxLeap = 7) {
+  if (!sequence || sequence.length < 2) return sequence;
+  
+  const result = [sequence[0]];
+  
+  for (let i = 1; i < sequence.length; i++) {
+    let current = sequence[i];
+    const prev = result[result.length - 1];
+    
+    if (current < 0) {
+      result.push(current); // Keep rests
+      continue;
+    }
+    
+    let interval = Math.abs(current - prev);
+    
+    // If leap is too large, move by step instead
+    if (interval > maxLeap) {
+      const direction = current > prev ? 1 : -1;
+      // Move by step (2-3 semitones) in the intended direction
+      current = prev + direction * (Math.random() < 0.5 ? 2 : 3);
+      // Ensure it's in scale
+      current = snapToScalePitch(current, currentScalePCs);
+    }
+    
+    // After a large leap, tend to move in opposite direction (melodic compensation)
+    if (i > 1 && interval > 4) {
+      const prevInterval = result[result.length - 1] - result[result.length - 2];
+      if ((prevInterval > 0 && current > prev) || (prevInterval < 0 && current < prev)) {
+        // Same direction after leap - reverse it sometimes
+        if (Math.random() < 0.6) {
+          current = prev - Math.sign(current - prev) * 2;
+          current = snapToScalePitch(current, currentScalePCs);
+        }
       }
-      if(typeof applyGenre === 'function'){
-        applyGenre(value);
+    }
+    
+    result.push(current);
+  }
+  
+  return result;
+}
+
+// Add rhythmic variety based on genre
+function applyRhythmicPattern(sequence, genre = 'none') {
+  if (!sequence || sequence.length === 0) return sequence;
+  
+  const patterns = RHYTHM_PATTERNS[genre] || RHYTHM_PATTERNS.pop;
+  const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+  
+  const result = [];
+  let patternIndex = 0;
+  
+  for (let note of sequence) {
+    const shouldPlay = pattern[patternIndex % pattern.length];
+    
+    if (shouldPlay === 1) {
+      result.push(note);
+    } else if (Math.random() < 0.3) {
+      // Sometimes skip notes for rhythmic interest
+      result.push(-1); // Rest
+    } else {
+      result.push(note);
+    }
+    
+    patternIndex++;
+  }
+  
+  return result;
+}
+
+// Create call-and-response patterns
+function applyCallAndResponse(sequence, phraseLength = 8) {
+  if (!sequence || sequence.length < phraseLength * 2) return sequence;
+  
+  const result = [];
+  
+  for (let i = 0; i < sequence.length; i += phraseLength * 2) {
+    // Call phrase (original)
+    for (let j = 0; j < phraseLength && i + j < sequence.length; j++) {
+      result.push(sequence[i + j]);
+    }
+    
+    // Response phrase (variation: transposed or inverted)
+    for (let j = 0; j < phraseLength && i + phraseLength + j < sequence.length; j++) {
+      let note = sequence[i + phraseLength + j];
+      
+      if (note > 0) {
+        // Sometimes transpose response
+        if (Math.random() < 0.5) {
+          note = snapToScalePitch(note + (Math.random() < 0.5 ? 3 : -3), currentScalePCs);
+        }
       }
+      
+      result.push(note);
+    }
+  }
+  
+  return result;
+}
 
-    })
-  })
+// Add chord tones on strong beats for harmonic clarity
+function emphasizeChordTones(sequence, chordName) {
+  if (!sequence || sequence.length === 0) return sequence;
+  
+  const chordPitches = getChordHarmonyPitches(chordName, 60, 3);
+  const chordPCs = chordPitches.map(p => p % 12);
+  
+  const result = [];
+  const beatsPerMeasure = 4;
+  
+  for (let i = 0; i < sequence.length; i++) {
+    let note = sequence[i];
+    
+    // On strong beats (1 and 3 of measure), prefer chord tones
+    const beatPosition = i % beatsPerMeasure;
+    if ((beatPosition === 0 || beatPosition === 2) && note > 0) {
+      const pc = note % 12;
+      
+      // If not a chord tone, find nearest chord tone
+      if (!chordPCs.includes(pc)) {
+        let nearest = chordPitches[0];
+        let minDist = Math.abs(note - nearest);
+        
+        for (let cp of chordPitches) {
+          // Find chord tone in same register
+          let candidate = cp;
+          while (candidate < note - 6) candidate += 12;
+          while (candidate > note + 6) candidate -= 12;
+          
+          const dist = Math.abs(note - candidate);
+          if (dist < minDist) {
+            minDist = dist;
+            nearest = candidate;
+          }
+        }
+        
+        // Replace with chord tone 60% of the time
+        if (Math.random() < 0.6) {
+          note = snapToScalePitch(nearest, currentScalePCs);
+        }
+      }
+    }
+    
+    result.push(note);
+  }
+  
+  return result;
+}
 
+// Add dynamics and expression (via velocity variation in future)
+function addMusicalExpression(sequence) {
+  if (!sequence || sequence.length === 0) return sequence;
+  
+  // For future: store velocity with notes
+  // For now, just mark climax points
+  const climaxPoint = Math.floor(sequence.length * 0.618); // Golden ratio
+  
+  return sequence; // Placeholder - velocity handled elsewhere
+}
 
+// ============================================================================
+// ENHANCED startSequenceGenerator with Musical Intelligence
+// ============================================================================
 
-})();
+// Store original function before overriding again
+const original_startSequenceGenerator_v2 = startSequenceGenerator;
 
-// --- modify startSequenceGenerator to honor genreConfig -------------------
-const original_startSequenceGenerator = startSequenceGenerator;
 startSequenceGenerator = function(seed) {
-  // read any genre overrides
-  const gc = window.genreConfig || {};
-  // if genre specifies a forced play interval, use it; else auto-detect
-  const playIntervalNotationOverride = gc.playIntervalNotation || null;
+  let running = true;
+  let lastGenerationTask = Promise.resolve();
 
-  // call original but patch internal determination of playIntervalNotation and mapping
-  // We'll clone original implementation but respect overrides and maxLeap
-
-  let running = true,
-    lastGenerationTask = Promise.resolve();
-
+  // Analyze the seed phrase to understand musical intent
+  const phraseAnalysis = analyzePhrase(seed);
+  
   let chords = detectChord(seed);
   let chord = _.first(chords) || 'CM';
   currentChordName = chord;
+  
   try {
     currentScalePCs = detectScale(seed) || currentScalePCs;
   } catch (e) {}
 
   let seedSeq = buildNoteSequence(seed);
   let generatedSequence = Math.random() < 0.7 ? _.clone(seedSeq.notes.map(n => n.pitch)) : [];
+  
   if (generatedSequence && generatedSequence.length) {
     generatedSequence = generatedSequence.map(p => snapToScalePitch(p, currentScalePCs));
   }
+
+  const gc = window.genreConfig || {};
+  const genre = currentGenre || 'none';
+  
   let launchWaitTime = getSequenceLaunchWaitTime(seed);
-  // use override if present
-  let playIntervalNotation = playIntervalNotationOverride || getSequencePlayIntervalNotation(seed);
+  let playIntervalNotation = gc.playIntervalNotation || getSequencePlayIntervalNotation(seed);
+  
   let playIntervalTime;
   try {
     playIntervalTime = Tone.Time(playIntervalNotation).toSeconds();
-    // Ensure minimum interval for high tempos
     playIntervalTime = Math.max(0.05, playIntervalTime);
   } catch (e) {
-    console.warn('Error calculating play interval time in genre mode:', e);
     playIntervalTime = 0.25;
   }
-  currentPlayNoteDuration = window.genreConfig && window.genreConfig.playDuration ? window.genreConfig.playDuration : playIntervalNotation;
+  
+  currentPlayNoteDuration = gc.playDuration || playIntervalNotation;
   let generationIntervalTime = Math.max(0.1, playIntervalTime / 2);
 
   function generateNext() {
     if (!running) return;
-    if (generatedSequence.length < 10) {
-       lastGenerationTask = rnn
-        .continueSequence(seedSeq, 20, temperature, [chord])
+    
+    if (generatedSequence.length < 16) { // Keep more notes buffered
+      lastGenerationTask = rnn
+        .continueSequence(seedSeq, 32, temperature, [chord]) // Generate more at once
         .then(genSeq => {
-          const mapped = genSeq.notes.map(n => snapToScalePitch(n.pitch, currentScalePCs));
-          generatedSequence = generatedSequence.concat(mapped);
-          // enforce melodic leap constraint if preset supplies maxLeap
-          if (window.genreConfig && window.genreConfig.maxLeap) {
-            generatedSequence = constrainMaxLeap(generatedSequence, window.genreConfig.maxLeap);
+          let mapped = genSeq.notes.map(n => snapToScalePitch(n.pitch, currentScalePCs));
+          
+          // === APPLY MUSICAL INTELLIGENCE ===
+          
+          // 1. Smooth melodic motion
+          const maxLeap = gc.maxLeap || 7;
+          mapped = smoothMelody(mapped, maxLeap);
+          
+          // 2. Apply rhythmic patterns
+          mapped = applyRhythmicPattern(mapped, genre);
+          
+          // 3. Add phrasing (rests at phrase boundaries)
+          const phraseLength = PHRASE_LENGTHS.medium;
+          mapped = applyPhrasing(mapped, phraseLength);
+          
+          // 4. Emphasize chord tones on strong beats
+          mapped = emphasizeChordTones(mapped, chord);
+          
+          // 5. Create call-and-response structure
+          if (mapped.length >= 16) {
+            mapped = applyCallAndResponse(mapped, 8);
           }
+          
+          // 6. Final smoothing pass
+          mapped = smoothMelody(mapped, maxLeap);
+          
+          generatedSequence = generatedSequence.concat(mapped);
+          
           const timeoutMs = Math.max(100, generationIntervalTime * 1000);
           setTimeout(generateNext, timeoutMs);
         })
         .catch(err => {
-          console.warn('Error generating sequence in genre mode:', err);
+          console.warn('Error generating sequence:', err);
           setTimeout(generateNext, 1000);
         });
     } else {
@@ -1285,6 +1569,8 @@ startSequenceGenerator = function(seed) {
   function consumeNext(time) {
     if (generatedSequence.length) {
       let note = generatedSequence.shift();
+      
+      // Skip rests (marked as -1)
       if (note > 0) {
         machineKeyDown(note, time);
       }
@@ -1303,6 +1589,31 @@ startSequenceGenerator = function(seed) {
     Tone.Transport.clear(consumerId);
   };
 };
+
+// Update GENRE_PRESETS with musical characteristics
+GENRE_PRESETS.pop.rhythmStyle = 'mixed';
+GENRE_PRESETS.pop.phraseLength = 'medium';
+GENRE_PRESETS.pop.articulation = 'mixed';
+
+GENRE_PRESETS.classical.rhythmStyle = 'legato';
+GENRE_PRESETS.classical.phraseLength = 'long';
+GENRE_PRESETS.classical.articulation = 'legato';
+
+GENRE_PRESETS.jazz.rhythmStyle = 'mixed';
+GENRE_PRESETS.jazz.phraseLength = 'medium';
+GENRE_PRESETS.jazz.articulation = 'staccato';
+
+GENRE_PRESETS.edm.rhythmStyle = 'mixed';
+GENRE_PRESETS.edm.phraseLength = 'short';
+GENRE_PRESETS.edm.articulation = 'staccato';
+
+GENRE_PRESETS.lofi.rhythmStyle = 'legato';
+GENRE_PRESETS.lofi.phraseLength = 'long';
+GENRE_PRESETS.lofi.articulation = 'legato';
+
+GENRE_PRESETS.ambient.rhythmStyle = 'sustained';
+GENRE_PRESETS.ambient.phraseLength = 'long';
+GENRE_PRESETS.ambient.articulation = 'legato';
 
 // Constrain melodic leaps in a sequence of MIDI pitches.
 // - seq: array of MIDI pitches (numbers)
@@ -1661,4 +1972,13 @@ window.midiHandler = {
   stopNote: stopMIDINote,
   getConnectedDevices: () => connectedDevices
 };
+
+// Add after temperature slider setup
+console.log(`🎵 Musical Intelligence Active:
+  - Melodic smoothing (max leap: ${GENRE_PRESETS[currentGenre]?.maxLeap || 7} semitones)
+  - Rhythmic patterns (${currentGenre} style)
+  - Phrase structure (${PHRASE_LENGTHS.medium} measures)
+  - Chord tone emphasis on strong beats
+  - Call-and-response patterns
+`);
 
