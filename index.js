@@ -372,17 +372,35 @@ function startSequenceGenerator(seed) {
   let running = true,
     lastGenerationTask = Promise.resolve();
 
-  let chords = detectChord(seed);
-  let chord = _.first(chords) || 'CM';
-  // remember current chord for harmony generation
-  currentChordName = chord;
-  // detect scale from the seed and store pitch classes
+  // Find this section in startSequenceGenerator (around line 530)
+
+// ...existing code...
+
+let chords = detectChord(seed);
+let chord = _.first(chords) || 'CM';
+currentChordName = chord;
+
+// === USE GENRE SCALE MODE IF SPECIFIED ===
+const gc = window.genreConfig || {};
+const genre = currentGenre || 'none';
+
+if (gc.scaleMode && SCALE_MODES[gc.scaleMode]) {
+  // Genre has a specific scale mode - use it!
+  const tonicPC = getTonicFromChord(chord);
+  currentScalePCs = getScaleForMode(gc.scaleMode, tonicPC);
+  console.log(`🎵 Using ${gc.scaleMode} scale for ${genre} genre:`, currentScalePCs);
+} else {
+  // Auto-detect scale from seed (original behavior)
   try {
     currentScalePCs = detectScale(seed) || currentScalePCs;
+    console.log('🎵 Auto-detected scale from seed:', currentScalePCs);
   } catch (e) {
-    // ignore detection errors
+    console.warn('Scale detection failed, using default');
   }
-  let seedSeq = buildNoteSequence(seed);
+}
+
+let seedSeq = buildNoteSequence(seed);
+// ...rest of existing code...
   let generatedSequence = Math.random() < 0.7 ? _.clone(seedSeq.notes.map(n => n.pitch)) : [];
   // snap any seeded/generated pitches to the detected scale so output follows it
   if (generatedSequence && generatedSequence.length) {
@@ -404,29 +422,73 @@ function startSequenceGenerator(seed) {
   currentPlayNoteDuration = playIntervalNotation;
   let generationIntervalTime = Math.max(0.1, playIntervalTime / 2);
 
-  function generateNext() {
-    if (!running) return;
-    if (generatedSequence.length < 10) {
-       lastGenerationTask = rnn
-        .continueSequence(seedSeq, 20, temperature, [chord])
+function generateNext() {
+  if (!running) return;
+  
+  if (generatedSequence.length < 16) {
+    
+    // === ARPEGGIO MODE ===
+    if (generationMode === 'arpeggio') {
+      // Generate arpeggio based on current chord
+      const rootNote = seed[0]?.note || 60;
+      const pattern = selectArpeggioPattern(genre, Math.floor(generatedSequence.length / 8));
+      
+      let arpeggio = generateArpeggio(chord, rootNote, pattern, 32);
+      
+      // Apply musical intelligence
+      arpeggio = varyArpeggioRhythm(arpeggio, genre);
+      arpeggio = addArpeggioOctaveVariation(arpeggio);
+      arpeggio = createArpeggioSections(arpeggio, chord, rootNote);
+      
+      // Snap to scale
+      arpeggio = arpeggio.map(n => n > 0 ? snapToScalePitch(n, currentScalePCs) : n);
+      
+      generatedSequence = generatedSequence.concat(arpeggio);
+      
+      console.log(`🎹 Generated ${arpeggio.length} arpeggio notes (${pattern} pattern)`);
+      
+      const timeoutMs = Math.max(50, generationIntervalTime * 1000); // Faster for arpeggios
+      setTimeout(generateNext, timeoutMs);
+    }
+    // === MELODY MODE (RNN AI) ===
+    else {
+      lastGenerationTask = rnn
+        .continueSequence(seedSeq, 32, temperature, [chord])
         .then(genSeq => {
-          // map generated pitches to nearest pitch in detected scale
-          const mapped = genSeq.notes.map(n => snapToScalePitch(n.pitch, currentScalePCs));
+          let mapped = genSeq.notes.map(n => snapToScalePitch(n.pitch, currentScalePCs));
+          
+          // Apply musical intelligence
+          const maxLeap = gc.maxLeap || 7;
+          mapped = smoothMelody(mapped, maxLeap);
+          mapped = applyRhythmicPattern(mapped, genre);
+          
+          const phraseLength = PHRASE_LENGTHS.medium;
+          mapped = applyPhrasing(mapped, phraseLength);
+          mapped = emphasizeChordTones(mapped, chord);
+          
+          if (mapped.length >= 16) {
+            mapped = applyCallAndResponse(mapped, 8);
+          }
+          
+          mapped = smoothMelody(mapped, maxLeap);
+          
           generatedSequence = generatedSequence.concat(mapped);
-          // Ensure minimum timeout to prevent overwhelming the system
+          
+          console.log(`🎵 Generated ${mapped.length} melody notes`);
+          
           const timeoutMs = Math.max(100, generationIntervalTime * 1000);
           setTimeout(generateNext, timeoutMs);
         })
         .catch(err => {
           console.warn('Error generating sequence:', err);
-          // Continue anyway with a longer delay
           setTimeout(generateNext, 1000);
         });
-    } else {
-      const timeoutMs = Math.max(100, generationIntervalTime * 1000);
-      setTimeout(generateNext, timeoutMs);
     }
+  } else {
+    const timeoutMs = Math.max(100, generationIntervalTime * 1000);
+    setTimeout(generateNext, timeoutMs);
   }
+}
 
   function consumeNext(time) {
     if (generatedSequence.length) {
@@ -580,6 +642,222 @@ function detectScale(seed) {
   return chosen.map(i => (tonic + i) % 12);
 }
 
+// Add after detectScale function (around line 657)
+
+// Scale mode definitions (pitch classes 0-11)
+const SCALE_MODES = {
+  major: [0, 2, 4, 5, 7, 9, 11],           // Ionian
+  minor: [0, 2, 3, 5, 7, 8, 10],           // Natural minor
+  dorian: [0, 2, 3, 5, 7, 9, 10],          // Dorian (jazz)
+  phrygian: [0, 1, 3, 5, 7, 8, 10],        // Phrygian
+  lydian: [0, 2, 4, 6, 7, 9, 11],          // Lydian
+  mixolydian: [0, 2, 4, 5, 7, 9, 10],      // Mixolydian
+  locrian: [0, 1, 3, 5, 6, 8, 10],         // Locrian
+  harmonic_minor: [0, 2, 3, 5, 7, 8, 11],  // Harmonic minor
+  melodic_minor: [0, 2, 3, 5, 7, 9, 11],   // Melodic minor
+  pentatonic: [0, 2, 4, 7, 9],             // Major pentatonic
+  minor_pentatonic: [0, 3, 5, 7, 10],      // Minor pentatonic
+  blues: [0, 3, 5, 6, 7, 10],              // Blues scale
+  chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+};
+
+  // ============================================================================
+// ARPEGGIO PATTERN GENERATOR
+// ============================================================================
+
+// Current generation mode
+let generationMode = 'melody';
+
+// Arpeggio patterns (indices into chord tone array)
+const ARPEGGIO_PATTERNS = {
+  ascending: [0, 1, 2, 3],           // Bottom to top (C E G C)
+  descending: [3, 2, 1, 0],          // Top to bottom (C G E C)
+  alternating: [0, 2, 1, 3, 2, 0],   // Up and down (C G E C E C)
+  octave: [0, 1, 2, 3, 4],           // Include octave jump
+  ripple: [0, 2, 0, 3, 0, 2],        // Rippling (C G C C G C)
+  broken: [0, 2, 1, 3, 1, 2],        // Broken chord (C G E C E G)
+  alberti: [0, 2, 1, 2],             // Alberti bass (C G E G)
+  waltz: [0, 1, 2, 1, 2, 1],         // Waltz pattern (C E G E G E)
+  cascade: [0, 1, 2, 3, 2, 1],       // Cascading (C E G C G E)
+  bounce: [0, 3, 1, 3, 2, 3]         // Bouncing off top note
+};
+
+// Genre-specific arpeggio pattern preferences
+const GENRE_ARPEGGIO_PATTERNS = {
+  pop: ['ascending', 'alternating', 'broken'],
+  classical: ['alberti', 'waltz', 'ascending', 'descending'],
+  jazz: ['broken', 'alternating', 'ripple'],
+  edm: ['ascending', 'octave', 'cascade'],
+  lofi: ['ascending', 'alternating', 'alberti'],
+  ambient: ['ascending', 'descending', 'ripple'],
+  arpeggio: ['ascending', 'alternating', 'broken', 'cascade'], // Default for arpeggio genre
+  none: ['ascending', 'alternating']
+};
+
+// Generate arpeggio from chord
+function generateArpeggio(chordName, rootNote, patternName = 'ascending', length = 16) {
+  const result = [];
+  
+  // Get chord tones
+  let chordTones = getChordHarmonyPitches(chordName, rootNote, 3);
+  
+  // Add root if missing
+  if (!chordTones.includes(rootNote)) {
+    chordTones.unshift(rootNote);
+  }
+  
+  // Sort ascending
+  chordTones.sort((a, b) => a - b);
+  
+  // Ensure at least 3 tones (build triad if needed)
+  if (chordTones.length < 3) {
+    chordTones = [
+      rootNote,
+      snapToScalePitch(rootNote + 4, currentScalePCs), // third
+      snapToScalePitch(rootNote + 7, currentScalePCs)  // fifth
+    ];
+  }
+  
+  // Add octave for richer patterns
+  const octaveNote = chordTones[0] + 12;
+  if (octaveNote <= MAX_NOTE && !chordTones.includes(octaveNote)) {
+    chordTones.push(octaveNote);
+  }
+  
+  // Get pattern
+  const pattern = ARPEGGIO_PATTERNS[patternName] || ARPEGGIO_PATTERNS.ascending;
+  
+  // Generate arpeggio
+  for (let i = 0; i < length; i++) {
+    const patternIndex = pattern[i % pattern.length];
+    const noteIndex = Math.min(patternIndex, chordTones.length - 1);
+    let note = chordTones[noteIndex];
+    
+    // Keep in range
+    note = Math.max(MIN_NOTE, Math.min(MAX_NOTE, note));
+    
+    result.push(note);
+  }
+  
+  return result;
+}
+
+// Select arpeggio pattern intelligently
+function selectArpeggioPattern(genre, phrasePosition = 0) {
+  const patterns = GENRE_ARPEGGIO_PATTERNS[genre] || GENRE_ARPEGGIO_PATTERNS.none;
+  
+  // Vary pattern based on phrase position for interest
+  const patternIndex = phrasePosition % patterns.length;
+  return patterns[patternIndex];
+}
+
+// Add rhythmic variation to arpeggio
+function varyArpeggioRhythm(arpeggio, genre) {
+  if (!arpeggio || arpeggio.length === 0) return arpeggio;
+  
+  const result = [];
+  const restProb = genre === 'jazz' ? 0.2 : genre === 'edm' ? 0.1 : 0.05;
+  
+  for (let i = 0; i < arpeggio.length; i++) {
+    const note = arpeggio[i];
+    
+    // Sometimes add rests for rhythmic interest
+    if (i > 0 && i % 8 === 0 && Math.random() < restProb) {
+      result.push(-1); // Rest
+    }
+    
+    result.push(note);
+  }
+  
+  return result;
+}
+
+// Add octave jumps for variety
+function addArpeggioOctaveVariation(arpeggio) {
+  if (!arpeggio || arpeggio.length < 8) return arpeggio;
+  
+  const result = [];
+  
+  for (let i = 0; i < arpeggio.length; i++) {
+    let note = arpeggio[i];
+    
+    if (note < 0) {
+      result.push(note); // Keep rests
+      continue;
+    }
+    
+    // Every 8th note, potentially jump octave
+    if (i > 0 && i % 8 === 0 && Math.random() < 0.3) {
+      const direction = Math.random() < 0.5 ? 12 : -12;
+      let newNote = note + direction;
+      
+      // Ensure in range
+      if (newNote >= MIN_NOTE && newNote <= MAX_NOTE) {
+        note = newNote;
+      }
+    }
+    
+    result.push(note);
+  }
+  
+  return result;
+}
+
+// Create contrasting arpeggio sections
+function createArpeggioSections(arpeggio, chordName, rootNote) {
+  if (!arpeggio || arpeggio.length < 16) return arpeggio;
+  
+  const sectionLength = 8;
+  const result = [];
+  let phraseCount = 0;
+  
+  for (let i = 0; i < arpeggio.length; i += sectionLength) {
+    // Select different pattern for each section
+    const pattern = selectArpeggioPattern(currentGenre, phraseCount);
+    const section = generateArpeggio(chordName, rootNote, pattern, sectionLength);
+    
+    result.push(...section);
+    phraseCount++;
+  }
+  
+  return result.slice(0, arpeggio.length); // Match original length
+}
+
+// Get scale pitch classes for a given mode and tonic
+function getScaleForMode(mode, tonic = 0) {
+  const scale = SCALE_MODES[mode] || SCALE_MODES.major;
+  return scale.map(interval => (tonic + interval) % 12);
+}
+
+// Extract tonic pitch class from chord name
+function getTonicFromChord(chordName) {
+  if (!chordName || chordName.length === 0) return 0;
+  
+  const noteMap = {
+    'C': 0, 'C#': 1, 'DB': 1, 'D': 2, 'D#': 3, 'EB': 3,
+    'E': 4, 'F': 5, 'F#': 6, 'GB': 6, 'G': 7, 'G#': 8,
+    'AB': 8, 'A': 9, 'A#': 10, 'BB': 10, 'B': 11
+  };
+  
+  // Try Tonal.js first
+  if (typeof Tonal !== 'undefined') {
+    try {
+      const info = Tonal.Chord.get(chordName);
+      if (info.tonic) {
+        const midiNote = Tonal.Note.midi(info.tonic + '4');
+        return midiNote % 12;
+      }
+    } catch (e) {}
+  }
+  
+  // Manual parsing
+  const tonic = chordName.slice(0, 2).toUpperCase();
+  if (noteMap[tonic] !== undefined) return noteMap[tonic];
+  
+  const singleChar = chordName[0].toUpperCase();
+  return noteMap[singleChar] || 0;
+}
+
 // Given a MIDI note number and an array of allowed pitch-classes (0-11),
 // return the nearest MIDI note within MIN_NOTE..MAX_NOTE whose pitch-class
 // is in `scalePCs`.
@@ -627,19 +905,19 @@ const padChorus = new Tone.Chorus(4, 2.5, 0.5).connect(padReverb);
 const pad = new Tone.PolySynth(Tone.FMSynth,{
   harmonicity:3.5,
   modulationIndex:10,
-  oscillator: {type:'sine'},
+  oscillator: {type:'sawtooth'},
   envelope:{
     attack:2,
     decay:1,
     sustain:0.8,
-    release:4
+    release:2
   },
   modulation:{type: 'triangle'},
   modulationEnvelope: {
     attack:0.8,
     decay: 0.3,
     sustain: 0.6,
-    release: 2
+    release: 1
   }
 }).connect(padChorus);
 
@@ -1088,6 +1366,18 @@ const GENRE_PRESETS = {
     playDuration: '2n',
     maxLeap: 36,
     scaleMode: 'major'
+  },
+  arpeggio:{
+         tempo: 110,
+    temperature: 0.8,
+    harmonyProbability: 0.0, // No harmony for clean arpeggios
+    playIntervalNotation: '16n', // Fast notes
+    playDuration: '16n',
+    maxLeap: 12, // Allow octave jumps
+    scaleMode: 'major',
+    generationMode: 'arpeggio', // ← Special mode
+    arpeggioPattern: 'auto', // Will select pattern based on context
+    arpeggioSpeed: 1.0
   }
 };
 
@@ -1101,86 +1391,101 @@ let currentGenre = 'none';
 document.addEventListener('DOMContentLoaded', () => {
   const genreButtons = document.querySelectorAll('.genre-btn');
   
-  genreButtons.forEach(button => {
-    button.addEventListener('click', (e) => {
-      const selectedGenre = e.target.dataset.value;
-      
-      // Only process genre buttons (not other buttons like drum/clear)
-      if (!selectedGenre) return;
-      
-      // Update active state
-      genreButtons.forEach(btn => {
-        if (btn.dataset.value) {
-          btn.classList.remove('active');
-        }
-      });
-      e.target.classList.add('active');
-      
-      // Set current genre
-      currentGenre = selectedGenre;
-      console.log('🎼 Genre changed to:', selectedGenre);
-      
-      // Apply genre preset if it exists
-      const preset = GENRE_PRESETS[selectedGenre];
-      if (preset) {
-        // Update tempo
-        if (preset.tempo) {
-          tempoBPM = preset.tempo;
-          const tempoSlider = document.getElementById('tempo');
-          if (tempoSlider) {
-            tempoSlider.value = preset.tempo;
-            try {
-              if (Tone.Transport && Tone.Transport.bpm && typeof Tone.Transport.bpm.rampTo === 'function') {
-                Tone.Transport.bpm.rampTo(preset.tempo, 0.5);
-              }
-            } catch (err) {
-              console.warn('Could not change tempo:', err);
-            }
-          }
-        }
-        
-        // Update temperature
-        if (preset.temperature !== undefined) {
-          temperature = preset.temperature;
-          const tempSlider = document.getElementById('temperature');
-          if (tempSlider) {
-            tempSlider.value = preset.temperature;
-          }
-        }
-        
-        // Update harmony probability
-        if (preset.harmonyProbability !== undefined) {
-          harmonyProbability = preset.harmonyProbability;
-        }
-        
-        // Store genre-specific config for sequence generator
-        window.genreConfig = {
-          playIntervalNotation: preset.playIntervalNotation,
-          playDuration: preset.playDuration,
-          maxLeap: preset.maxLeap,
-          scaleMode: preset.scaleMode,
-          rhythmStyle: preset.rhythmStyle,
-          phraseLength: preset.phraseLength,
-          articulation: preset.articulation
-        };
-        
-        console.log(`✨ Applied ${selectedGenre} preset:`, {
-          tempo: preset.tempo,
-          temperature: preset.temperature,
-          harmonyProb: preset.harmonyProbability,
-          maxLeap: preset.maxLeap
-        });
-        
-        // Log musical intelligence settings
-        console.log(`🎵 Musical Intelligence for ${selectedGenre}:
-  - Melodic smoothing (max leap: ${preset.maxLeap || 7} semitones)
-  - Rhythmic pattern: ${preset.rhythmStyle || 'balanced'}
-  - Phrase structure: ${preset.phraseLength || 'medium'}
-  - Articulation: ${preset.articulation || 'mixed'}
-`);
+genreButtons.forEach(button => {
+  button.addEventListener('click', (e) => {
+    const selectedGenre = e.target.dataset.value;
+    if (!selectedGenre) return;
+    
+    // Update active state
+    genreButtons.forEach(btn => {
+      if (btn.dataset.value) {
+        btn.classList.remove('active');
       }
     });
+    e.target.classList.add('active');
+    
+    // Set current genre
+    currentGenre = selectedGenre;
+    console.log('🎼 Genre changed to:', selectedGenre);
+    
+    // Apply preset
+    const preset = GENRE_PRESETS[selectedGenre];
+    if (preset) {
+      // Update tempo
+      if (preset.tempo) {
+        tempoBPM = preset.tempo;
+        const tempoSlider = document.getElementById('tempo');
+        if (tempoSlider) {
+          tempoSlider.value = preset.tempo;
+          try {
+            if (Tone.Transport && Tone.Transport.bpm && typeof Tone.Transport.bpm.rampTo === 'function') {
+              Tone.Transport.bpm.rampTo(preset.tempo, 0.5);
+            }
+          } catch (err) {
+            console.warn('Could not change tempo:', err);
+          }
+        }
+      }
+      
+      // Update temperature
+      if (preset.temperature !== undefined) {
+        temperature = preset.temperature;
+        const tempSlider = document.getElementById('temperature');
+        if (tempSlider) {
+          tempSlider.value = preset.temperature;
+        }
+      }
+      
+      // Update harmony probability
+      if (preset.harmonyProbability !== undefined) {
+        harmonyProbability = preset.harmonyProbability;
+      }
+      
+      // ✨ Set generation mode from preset
+      if (preset.generationMode) {
+        generationMode = preset.generationMode;
+      }
+      
+      // Store genre config
+      window.genreConfig = {
+        playIntervalNotation: preset.playIntervalNotation,
+        playDuration: preset.playDuration,
+        maxLeap: preset.maxLeap,
+        scaleMode: preset.scaleMode,
+        rhythmStyle: preset.rhythmStyle,
+        phraseLength: preset.phraseLength,
+        articulation: preset.articulation,
+        generationMode: preset.generationMode // ← Add this
+      };
+      
+      console.log(`✨ Applied ${selectedGenre} preset:`, {
+        tempo: preset.tempo,
+        temperature: preset.temperature,
+        harmonyProb: preset.harmonyProbability,
+        maxLeap: preset.maxLeap,
+        mode: preset.generationMode
+      });
+      
+      // Log mode info
+      if (preset.generationMode === 'arpeggio') {
+        console.log('🎹 ARPEGGIO MODE: Broken chord patterns, no AI generation');
+      } else {
+        console.log('🎵 MELODY MODE: AI-generated melodic lines');
+      }
+      
+      // Restart generator with new mode if currently playing
+      if (stopCurrentSequenceGenerator && currentSeed.length) {
+        console.log('🔄 Restarting generator with new settings...');
+        stopCurrentSequenceGenerator();
+        stopCurrentSequenceGenerator = null;
+        
+        stopCurrentSequenceGenerator = startSequenceGenerator(
+          _.cloneDeep(currentSeed)
+        );
+      }
+    }
   });
+});
   
   // Initialize with default genre (Auto)
   const defaultBtn = document.querySelector('.genre-btn.active');

@@ -464,19 +464,29 @@ window.onload = async function () {
     }
   }
 
-  const drumbtn = document.querySelector('.drum-btn');
 
-  if(drumbtn){
-    drumbtn.addEventListener('click', async () => {
-      if (!running){ 
-        await startTransport();
-        drumbtn.classList.add('highlight');
-      } else {
-        stopTransport();
-        drumbtn.classList.remove('highlight');
-      }
-    });
-  }
+const drumbtn = document.querySelector('.drum-btn');
+
+if(drumbtn){
+  drumbtn.addEventListener('click', async () => {
+    if (!running){ 
+      await startTransport();
+      drumbtn.classList.add('highlight');
+      
+      // Optional: Notify that drums started (for sync purposes only, not blocking)
+      window.dispatchEvent(new CustomEvent('drumsStarted', { 
+        detail: { bpm: Tone.Transport.bpm.value } 
+      }));
+      
+    } else {
+      stopTransport();
+      drumbtn.classList.remove('highlight');
+      
+      // Optional: Notify that drums stopped
+      window.dispatchEvent(new CustomEvent('drumsStopped'));
+    }
+  });
+}
 
   // Generate button
   const generateBtn = document.getElementById('generate-drums');
