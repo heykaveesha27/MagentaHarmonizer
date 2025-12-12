@@ -11,7 +11,7 @@
     <script src="index.js" defer></script>
     <script src="drum.js" defer></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/startaudiocontext/1.0.1/startaudiocontext.min.js"></script>
 <script src="https://unpkg.com/audiokeys@1.2.1/dist/audiokeys.min.js"></script>
@@ -19,6 +19,8 @@
 <script src="https://unpkg.com/@tonaljs/tonal@3.8.0/dist/tonal.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@magenta/music@1.0.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet@2.2.2"></script>
+<script src="posenet-control.js" defer></script>
 </head>
 <body>
    
@@ -210,6 +212,88 @@
 
 </div>      
 
+</div>      
+<!-- PoseNet Webcam Section -->
+<!-- PoseNet Webcam Section - Replace the existing section in your HTML -->
+<div class="posenet-section" style="margin-top: 50px; text-align: center;">
+    <h2 style="color: #38bdf8; margin-bottom: 10px;">Body Control with AI</h2>
+    <p style="color: #888; margin-bottom: 20px; font-size: 14px;">
+        Control drums and volume with hand gestures using PoseNet AI
+    </p>
+    
+    <div class="video-container" style="position: relative; display: inline-block; margin-bottom: 20px;">
+        <video id="webcam" width="640" height="480" autoplay style="border-radius: 8px; background: #000;"></video>
+        <canvas id="output" width="640" height="480" style="position: absolute; top: 0; left: 0;"></canvas>
+    </div>
+    
+    <div style="margin-top: 20px; display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap;">
+        <button id="startPoseNet" class="genre-btn" style="padding: 8px 20px; background: #3369af; color: white;">
+            🎥 Start Body Control
+        </button>
+        <button id="stopPoseNet" class="genre-btn" style="padding: 8px 20px; background: #ef4444; color: white; display: none;">
+            🛑 Stop Camera
+        </button>
+        
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+            <label style="font-size: 14px; color: #888;">Control Mode:</label>
+            <select id="poseControlMode" class="genre-btn" style="padding: 8px 16px;">
+                <option value="volume">🔊 Volume Control</option>
+                <option value="drum-generate">🎵 Generate Drums</option>
+                <option value="drum-trigger">🥁 Trigger Drums</option>
+            </select>
+        </div>
+    </div>
+    
+    <div id="poseStatus" style="margin-top: 20px; font-size: 14px; color: #888; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px; display: inline-block;">
+        Camera not started
+    </div>
+    
+    <!-- Gesture Instructions -->
+    <div style="margin-top: 30px; text-align: left; max-width: 700px; margin-left: auto; margin-right: auto; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 8px;">
+        <h3 style="color: #39bdf8; margin-bottom: 15px;">📋 Gesture Instructions</h3>
+        
+        <div style="margin-bottom: 15px;">
+            <h4 style="color: #fff; font-size: 16px; margin-bottom: 8px;">🔊 Volume Control Mode:</h4>
+            <ul style="color: #a0a0a0; font-size: 14px; line-height: 1.8; list-style-position: inside;">
+                <li><strong style="color: #4CAF50;">Spread hands wide</strong> → Increase master volume</li>
+                <li><strong style="color: #3b82f6;">Bring hands close</strong> → Decrease master volume</li>
+                <li><strong style="color: #f59e0b;">Left hand height</strong> → Control synth volume</li>
+                <li><strong style="color: #ef4444;">Right hand height</strong> → Control melody volume</li>
+            </ul>
+        </div>
+        
+        <div style="margin-bottom: 15px;">
+            <h4 style="color: #fff; font-size: 16px; margin-bottom: 8px;">🎵 Generate Drums Mode:</h4>
+            <ul style="color: #a0a0a0; font-size: 14px; line-height: 1.8; list-style-position: inside;">
+                <li><strong style="color: #39bdf8;">Raise BOTH hands</strong> above shoulders</li>
+                <li><strong style="color: #10b981;">Hold for 1 second</strong> → AI generates drum pattern!</li>
+                <li>2 second cool down between generations</li>
+            </ul>
+        </div>
+        
+        <div>
+            <h4 style="color: #fff; font-size: 16px; margin-bottom: 8px;">🥁 Trigger Drums Mode:</h4>
+            <ul style="color: #a0a0a0; font-size: 14px; line-height: 1.8; list-style-position: inside;">
+                <li><strong style="color: #ef4444;">Left hand up</strong> → Kick drum</li>
+                <li><strong style="color: #3b82f6;">Right hand up</strong> → Snare drum</li>
+                <li><strong style="color: #10b981;">Both hands up</strong> → Hi-hat</li>
+                <li><strong style="color: #f59e0b;">Hands together (clap)</strong> → Clap sound</li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- Performance Tips -->
+    <div style="margin-top: 20px; padding: 15px; background: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b; border-radius: 4px; text-align: left; max-width: 700px; margin-left: auto; margin-right: auto;">
+        <h4 style="color: #f59e0b; font-size: 14px; margin-bottom: 8px;">💡 Tips for Best Results:</h4>
+        <ul style="color: #d0d0d0; font-size: 13px; line-height: 1.6; list-style-position: inside;">
+            <li>Ensure good lighting for better pose detection</li>
+            <li>Stand 3-5 feet away from camera</li>
+            <li>Keep upper body visible (shoulders and hands)</li>
+            <li>Move smoothly - sudden movements may not register</li>
+            <li>Wear contrasting colors to background</li>
+        </ul>
+    </div>
+</div>
   
 </div>
 
