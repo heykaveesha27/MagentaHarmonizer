@@ -53,7 +53,13 @@
           <button class="genre-btn" data-value="edm">EDM</button>
           <button class="genre-btn" data-value="lofi">Lo-Fi</button>
           <button class="genre-btn" data-value="ambient" style="border-bottom-right-radius: 8px;border-top-right-radius: 8px;">Ambient</button>
+          <button class="genre-btn" data-value="arpeggio" style="border-bottom-right-radius: 8px;border-top-right-radius: 8px;">Arpeggio</button>
         </div>
+        
+        <!-- Add after the genre buttons section -->
+
+
+          
           <div class="drum-btn highlight">
             
             <i class="fa-solid fa-drum"></i>
@@ -75,7 +81,7 @@
         
         <div style="display: flex; flex-direction: column; align-items: center;">
             <input id="synthvol" type="range" min="0" max="1" step="0.01" value="0.6" aria-label="Tempo">
-          <label for="synth">Synth Volume</label>
+          <label for="synth">Pad Volume</label>
           
         </div>
         <div style="display: flex; flex-direction: column; align-items: center;">
@@ -207,8 +213,51 @@
   
 </div>
 
+<!-- Add after the drum button -->
+<div id="melody-sync-status" style="
+  display: none;
+  padding: 8px 12px;
+  background: rgba(30, 136, 229, 0.1);
+  border: 1px solid rgba(30, 136, 229, 0.3);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1E88E5;
+  text-align: center;">
+  <i class="fa-solid fa-clock"></i>
+  <span id="sync-countdown">Syncing...</span>
+</div>
 
+<!-- Add in controls section -->
+<div id="beat-indicator" style="
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  justify-content: center;">
+  <div class="beat-dot" data-beat="1"></div>
+  <div class="beat-dot" data-beat="2"></div>
+  <div class="beat-dot" data-beat="3"></div>
+  <div class="beat-dot" data-beat="4"></div>
+</div>
 
+<style>
+.beat-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  transition: all 0.1s;
+}
 
+.beat-dot.active {
+  background: #1E88E5;
+  box-shadow: 0 0 10px #1E88E5;
+  transform: scale(1.3);
+}
+
+.beat-dot.downbeat {
+  background: #E91E63;
+  box-shadow: 0 0 10px #E91E63;
+}
+</style>
 </body>
 </html>
